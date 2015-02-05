@@ -11,6 +11,7 @@ enable_testing()
 
 if (BUILD_TESTING)
 find_package(JNI REQUIRED)
+include_directories(${JNI_INCLUDE_DIRS})
 endif()
 
 find_package(Protobuf REQUIRED)
