@@ -15,6 +15,7 @@ endif()
 
 find_package(Protobuf REQUIRED)
 include_directories(third_party/asio-1.10.2/include)
+include_directories(third_party/gtest-1.7.0/include)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 include_directories(${CMAKE_BINARY_DIR}/lib/proto)
 include_directories(include)
@@ -29,3 +30,4 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
 
 add_subdirectory(lib)
+add_subdirectory(third_party/gtest-1.7.0)
