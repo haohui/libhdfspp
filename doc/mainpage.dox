@@ -1,0 +1,12 @@
+/**
+\mainpage libhdfs++
+
+libhdfs++ is a modern implementation of HDFS client in C++11. It is
+optimized for the Massive Parallel Processing (MPP) applications that
+access thousands of files concurrently in HDFS.
+
+libhdfs++ is built on top of an event-driven architecture. It
+expresses the HDFS protocols with \link hdfs::monad::Monad \endlink for
+maintainability.
+
+*/

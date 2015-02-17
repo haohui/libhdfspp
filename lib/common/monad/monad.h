@@ -26,6 +26,37 @@ namespace monad {
 
 template<class, class> struct Bind;
 
+/**
+ * Monad is the basic abstraction to describe a sequence of
+ * asynchronous operations in libhdfs++.
+ *
+ * The concept of monad is widely adopted in the functional
+ * programming community. In the context of pure functional
+ * programming, a monad `M` describes the operation as a function
+ * `M_f` that "transforms" the program state `E`, that is, `M_f : E ->
+ * E`. Therefore, a sequence of operations `o_1, o_2, ...` can be
+ * expressed as applying the corresponding sequence of monad functions
+ * `m_1, m_2, ...` to the program state:
+ *
+ *     o_1; o_2; ... <=> ...m_2(m_1(E))...
+ *
+ * The key benefit of the monadic structures is that monadic functions
+ * can be executed *asynchronously* in an event loop while you can
+ * still write the program in a synchronous, blocking style. The
+ * monadic structure (particularly the \link Bind \endlink operator)
+ * encapsulates the details of running functions in the event loops,
+ * etc.
+ *
+ * For more information about monad you can visit:
+ *
+ *   * https://github.com/inetic/masio
+ *   * http://bartoszmilewski.com/2011/07/11/monads-in-c
+ *
+ * In libhdfs++, one gotcha is that you need to be careful on managing
+ * the life cycle of the monads as they can be referneced in the event
+ * loop. An simple approach is to wrap the monads using
+ * `std::shared_ptr`.
+ **/
 template<typename... A>
 struct Monad {
   typedef Monad<A...> MonadType;

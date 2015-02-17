@@ -1,0 +1,18 @@
+# Doxyfile 1.8.8
+
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "libhdfs++"
+OUTPUT_DIRECTORY       = doc
+TAB_SIZE               = 2
+MARKDOWN_SUPPORT       = YES
+BUILTIN_STL_SUPPORT    = YES
+
+
+INPUT                  = @CMAKE_SOURCE_DIR@/doc/mainpage.dox \
+                         @CMAKE_SOURCE_DIR@/include/libhdfs++ \
+                         @CMAKE_SOURCE_DIR@/lib/common/monad
+INPUT_ENCODING         = UTF-8
+RECURSIVE              = NO
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO

@@ -14,6 +14,8 @@ find_package(JNI REQUIRED)
 endif()
 
 find_package(Protobuf REQUIRED)
+find_package(Doxygen)
+
 include_directories(third_party/asio-1.10.2/include)
 include_directories(third_party/gtest-1.7.0/include)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
@@ -28,6 +30,13 @@ endif()
 if(APPLE)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 endif()
+
+if(DOXYGEN_FOUND)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile @ONLY)
+add_custom_target(doc ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/doc/Doxyfile
+                  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                  COMMENT "Generating API documentation with Doxygen" VERBATIM)
+endif(DOXYGEN_FOUND)
 
 add_subdirectory(lib)
 add_subdirectory(third_party/gtest-1.7.0)
