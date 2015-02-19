@@ -41,12 +41,19 @@ enum DropBehindStrategy {
   kDisableDropBehind = 2,
 };
 
+enum EncryptionScheme {
+  kNone = 0,
+  kAESCTRNoPadding = 1,
+};
+
 struct BlockReaderOptions {
   bool verify_checksum;
   CacheStrategy cache_strategy;
+  EncryptionScheme encryption_scheme;
 
   BlockReaderOptions()
       : verify_checksum(true)
+      , encryption_scheme(EncryptionScheme::kNone)
   {}
 };
 

@@ -71,6 +71,14 @@ Bind<MA, MB> operator>>=(MA&& ma, MB&& mb) {
   return Bind<MA, MB>(std::forward<MA>(ma), std::forward<MB>(mb));
 }
 
+#define HDFS_MONAD_DEFAULT_MOVE_CONSTRUCTOR(clazz) \
+  clazz(clazz &&) = default; \
+  clazz& operator=(clazz &&) = default
+
+#define HDFS_MONAD_DISABLE_COPY_CONSTRUCTOR(clazz) \
+  clazz(const clazz &) = delete; \
+  clazz& operator=(const clazz &) = delete
+
 }
 }
 

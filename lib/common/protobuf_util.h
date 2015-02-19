@@ -3,6 +3,7 @@
 
 #include "libhdfs++/status.h"
 #include "monad/monad.h"
+#include "monad/write.h"
 
 #include <google/protobuf/message_lite.h>
 #include <google/protobuf/io/coded_stream.h>
@@ -87,10 +88,41 @@ struct ReadPBMessageMonad : monad::Monad<> {
   std::array<char, MaxMessageSize> buf_;
 };
 
+template <class Stream>
+struct WriteDelimitedPBMessageMonad : monad::Monad<> {
+  WriteDelimitedPBMessageMonad(std::shared_ptr<Stream> stream,
+                               const google::protobuf::MessageLite *msg)
+      : stream_(stream)
+      , msg_(msg)
+  {}
+
+  WriteDelimitedPBMessageMonad(WriteDelimitedPBMessageMonad &&) = default;
+  WriteDelimitedPBMessageMonad &operator=(WriteDelimitedPBMessageMonad &&) = default;
+
+  template<class Next>
+  void Run(const Next& next) {
+    AppendToDelimitedString(msg_, &buf_);
+    monad::Write(stream_, asio::buffer(buf_)).Run(next);
+  }
+
+ private:
+  WriteDelimitedPBMessageMonad(const WriteDelimitedPBMessageMonad &) = delete;
+  WriteDelimitedPBMessageMonad &operator=(const WriteDelimitedPBMessageMonad &) = delete;
+  std::shared_ptr<Stream> stream_;
+  const google::protobuf::MessageLite * msg_;
+  std::string buf_;
+};
+
 template<class Stream, class Message, size_t MaxMessageSize = 512>
 ReadPBMessageMonad<Stream, Message, MaxMessageSize>
 ReadPBMessage(std::shared_ptr<Stream> stream, Message *msg) {
   return ReadPBMessageMonad<Stream, Message, MaxMessageSize>(stream, msg);
+}
+
+template<class Stream>
+WriteDelimitedPBMessageMonad<Stream>
+WriteDelimitedPBMessage(std::shared_ptr<Stream> stream, google::protobuf::MessageLite *msg) {
+  return WriteDelimitedPBMessageMonad<Stream>(stream, msg);
 }
 
 }

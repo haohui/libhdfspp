@@ -1,5 +1,5 @@
 include_directories(${OPENSSL_INCLUDE_DIRS})
-add_library(common status.cc sasl_digest_md5.cc)
+add_library(common status.cc datatransfer_sasl.cc sasl_digest_md5.cc)
 add_executable(sasl_digest_md5_test sasl_digest_md5_test.cc)
 target_link_libraries(sasl_digest_md5_test common ${OPENSSL_LIBRARIES} gtest_main)
 add_test(sasl_digest_md5_test sasl_digest_md5_test)
