@@ -14,6 +14,7 @@ find_package(JNI REQUIRED)
 endif()
 
 find_package(Protobuf REQUIRED)
+find_package(OpenSSL REQUIRED)
 find_package(Doxygen)
 
 include_directories(third_party/asio-1.10.2/include)
@@ -28,7 +29,9 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -std=c++11 -g")
 endif()
 
 if(APPLE)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+# Mac OS 10.7 and later deprecates most of the methods in OpenSSL.
+# Add -Wno-deprecated-declarations to avoid the warnings.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wno-deprecated-declarations")
 endif()
 
 if(DOXYGEN_FOUND)

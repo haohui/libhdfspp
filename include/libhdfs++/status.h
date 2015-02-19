@@ -35,6 +35,11 @@ class Status {
 
   // Return a success status.
   static Status OK() { return Status(); }
+  static Status Unimplemented() { return Status(kUnimplemented, ""); }
+  static Status Error(const char *msg)
+  { return Status(kGenericError, msg); }
+  static Status InvalidEncryptionKey(const char *msg)
+  { return Status(kInvalidEncryptionKey, msg); }
 
   // Returns true iff the status indicates success.
   bool ok() const { return (state_ == NULL); }
@@ -55,7 +60,12 @@ class Status {
   //    state_[5..]  == message
   const char* state_;
 
-  enum Code { kOk = 0 };
+  enum Code {
+    kOk = 0,
+    kGenericError = 1,
+    kInvalidEncryptionKey = 2,
+    kUnimplemented = 3,
+  };
 
   static const char* CopyState(const char* s);
 };

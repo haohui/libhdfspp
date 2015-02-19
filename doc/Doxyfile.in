@@ -10,6 +10,7 @@ BUILTIN_STL_SUPPORT    = YES
 
 INPUT                  = @CMAKE_SOURCE_DIR@/doc/mainpage.dox \
                          @CMAKE_SOURCE_DIR@/include/libhdfs++ \
+                         @CMAKE_SOURCE_DIR@/lib/common \
                          @CMAKE_SOURCE_DIR@/lib/common/monad
 INPUT_ENCODING         = UTF-8
 RECURSIVE              = NO
