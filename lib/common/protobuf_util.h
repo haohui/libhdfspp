@@ -11,6 +11,8 @@
 
 #include <asio/read.hpp>
 
+#include <functional>
+
 #include <cassert>
 
 namespace hdfs {
