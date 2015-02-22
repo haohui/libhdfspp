@@ -18,12 +18,16 @@ find_package(Protobuf REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Doxygen)
 
+GET_FILENAME_COMPONENT(HADOOP_TOP_DIR "${PROJECT_SOURCE_DIR}/../../../../../" REALPATH)
+
 include_directories(third_party/asio-1.10.2/include)
 include_directories(third_party/gtest-1.7.0/include)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 include_directories(${CMAKE_BINARY_DIR}/lib/proto)
 include_directories(include)
 include_directories(lib)
+include_directories(lib/reader)
+include_directories(lib/common)
 
 add_definitions(-DASIO_STANDALONE)
 if(UNIX)
@@ -45,3 +49,5 @@ endif(DOXYGEN_FOUND)
 
 add_subdirectory(lib)
 add_subdirectory(third_party/gtest-1.7.0)
+add_subdirectory(third_party/jsoncpp)
+add_subdirectory(test)
