@@ -29,8 +29,7 @@ static inline void AppendToDelimitedString(const google::protobuf::MessageLite *
 
 template <class Stream, class Message, size_t MaxMessageSize = 512>
 struct ReadPBMessageMonad : monad::Monad<> {
-  ReadPBMessageMonad(std::shared_ptr<Stream> stream,
-                     Message *msg)
+  ReadPBMessageMonad(Stream *stream, Message *msg)
       : stream_(stream)
       , msg_(msg)
   {}
@@ -85,14 +84,14 @@ struct ReadPBMessageMonad : monad::Monad<> {
 
   ReadPBMessageMonad(const ReadPBMessageMonad &) = delete;
   ReadPBMessageMonad &operator=(const ReadPBMessageMonad &) = delete;
-  std::shared_ptr<Stream> stream_;
+  Stream *stream_;
   Message *msg_;
   std::array<char, MaxMessageSize> buf_;
 };
 
 template <class Stream>
 struct WriteDelimitedPBMessageMonad : monad::Monad<> {
-  WriteDelimitedPBMessageMonad(std::shared_ptr<Stream> stream,
+  WriteDelimitedPBMessageMonad(Stream *stream,
                                const google::protobuf::MessageLite *msg)
       : stream_(stream)
       , msg_(msg)
@@ -110,20 +109,20 @@ struct WriteDelimitedPBMessageMonad : monad::Monad<> {
  private:
   WriteDelimitedPBMessageMonad(const WriteDelimitedPBMessageMonad &) = delete;
   WriteDelimitedPBMessageMonad &operator=(const WriteDelimitedPBMessageMonad &) = delete;
-  std::shared_ptr<Stream> stream_;
+  Stream *stream_;
   const google::protobuf::MessageLite * msg_;
   std::string buf_;
 };
 
 template<class Stream, class Message, size_t MaxMessageSize = 512>
 ReadPBMessageMonad<Stream, Message, MaxMessageSize>
-ReadPBMessage(std::shared_ptr<Stream> stream, Message *msg) {
+ReadPBMessage(Stream *stream, Message *msg) {
   return ReadPBMessageMonad<Stream, Message, MaxMessageSize>(stream, msg);
 }
 
 template<class Stream>
 WriteDelimitedPBMessageMonad<Stream>
-WriteDelimitedPBMessage(std::shared_ptr<Stream> stream, google::protobuf::MessageLite *msg) {
+WriteDelimitedPBMessage(Stream *stream, google::protobuf::MessageLite *msg) {
   return WriteDelimitedPBMessageMonad<Stream>(stream, msg);
 }
 

@@ -75,7 +75,7 @@ struct DataTransferSaslStream<Stream>::AuthenticatorMonad : monad::Monad<> {
 
 template<class Stream>
 struct DataTransferSaslStream<Stream>::ReadSaslMessageMonad : monad::Monad<> {
-  ReadSaslMessageMonad(const std::shared_ptr<Stream> &stream, std::string *data)
+  ReadSaslMessageMonad(Stream *stream, std::string *data)
       : stream_(stream)
       , data_(data)
   {}
@@ -97,7 +97,7 @@ struct DataTransferSaslStream<Stream>::ReadSaslMessageMonad : monad::Monad<> {
   }
 
  private:
-  std::shared_ptr<Stream> stream_;
+  Stream *stream_;
   std::string *data_;
   hadoop::hdfs::DataTransferEncryptorMessageProto resp_;
   typedef ReadPBMessageMonad<Stream, hadoop::hdfs::DataTransferEncryptorMessageProto, 1024> ReadMonad;
@@ -113,17 +113,19 @@ void DataTransferSaslStream<Stream>::Handshake(const Handler &next) {
     std::string response0;
     DataTransferEncryptorMessageProto request1;
     std::string response1;
+    std::shared_ptr<Stream> stream;
   };
   auto s = std::make_shared<State>();
+  s->stream = stream_;
   s->magic_number = htonl(kDataTransferSasl);
   DataTransferSaslStreamUtil::PrepareInitialHandshake(&s->request0);
 
   auto prog = monad::Write(stream_, asio::buffer(reinterpret_cast<const char*>(&s->magic_number), sizeof(s->magic_number)))
-          >>= WriteDelimitedPBMessage(stream_, &s->request0)
-          >>= ReadSaslMessageMonad(stream_, &s->response0)
+          >>= WriteDelimitedPBMessage(stream_.get(), &s->request0)
+          >>= ReadSaslMessageMonad(stream_.get(), &s->response0)
           >>= AuthenticatorMonad(&authenticator_, &options_, &s->response0, &s->request1)
-          >>= WriteDelimitedPBMessage(stream_, &s->request1)
-          >>= ReadSaslMessageMonad(stream_, &s->response1);
+          >>= WriteDelimitedPBMessage(stream_.get(), &s->request1)
+          >>= ReadSaslMessageMonad(stream_.get(), &s->response1);
 
   // TODO: Check whether the server and the client matches the QOP
 

@@ -66,8 +66,8 @@ void RemoteBlockReader<Stream>::async_connect(const std::string &client_name,
   s->request.insert(s->request.begin(), { 0, kDataTransferVersion, Operation::kReadBlock });
   AppendToDelimitedString(&p, &s->request);
 
-  auto prog = monad::Write(stream_, asio::buffer(s->request))
-          >>= ReadPBMessage(stream_, &s->response);
+  auto prog = monad::Write(stream_.get(), asio::buffer(s->request))
+          >>= ReadPBMessage(stream_.get(), &s->response);
 
   auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
   m->Run([m,s,this,handler](const Status &status) {
@@ -223,7 +223,7 @@ struct RemoteBlockReader<Stream>::AckRead : monad::Monad<> {
                  hadoop::hdfs::Status::CHECKSUM_OK : hadoop::hdfs::Status::SUCCESS);
     auto req = std::make_shared<std::string>();
     AppendToDelimitedString(&p, req.get());
-    auto prog = monad::Write(self_->stream_, asio::buffer(*req));
+    auto prog = monad::Write(self_->stream_.get(), asio::buffer(*req));
     auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
     m->Run([m,req,next,this](const Status &status) {
         if (status.ok()) {

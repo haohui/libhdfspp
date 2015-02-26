@@ -28,7 +28,7 @@ namespace monad {
 
 template<class Stream, class ConstBufferSequence>
 struct WriteMonad : Monad<> {
-  WriteMonad(std::shared_ptr<Stream> stream, const ConstBufferSequence& buffer)
+  WriteMonad(Stream *stream, const ConstBufferSequence& buffer)
       : stream_(stream)
       , buffer_(buffer)
   {}
@@ -49,7 +49,7 @@ struct WriteMonad : Monad<> {
   }
 
  private:
-  std::shared_ptr<Stream> stream_;
+  Stream *stream_;
   ConstBufferSequence buffer_;
 
   WriteMonad(const WriteMonad&) = delete;
@@ -58,7 +58,7 @@ struct WriteMonad : Monad<> {
 
 
 template<class Stream, class ConstBufferSequence>
-WriteMonad<Stream, ConstBufferSequence> Write(std::shared_ptr<Stream> stream, const ConstBufferSequence &buffer) {
+WriteMonad<Stream, ConstBufferSequence> Write(Stream *stream, const ConstBufferSequence &buffer) {
   return WriteMonad<Stream, ConstBufferSequence>(stream, buffer);
 }
 
