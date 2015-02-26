@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
   BlockReaderOptions options;
   RemoteBlockReader<tcp::socket> reader(options, s);
   std::unique_ptr<char[]> buf(new char[size]);
-  reader.async_connect("libhdfs++", &block, size, offset, [&buf,&reader,size](const Status &status) {
+  reader.async_connect("libhdfs++", nullptr, &block, size, offset, [&buf,&reader,size](const Status &status) {
       if (!status.ok()) {
         std::cerr << "Error:" << status.code() << " " << status.ToString() << std::endl;
       } else {
