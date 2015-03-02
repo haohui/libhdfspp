@@ -27,6 +27,21 @@ static inline void AppendToDelimitedString(const google::protobuf::MessageLite *
   msg->SerializeToCodedStream(&os);
 }
 
+static inline int DelimitedPBMessageSize(const ::google::protobuf::MessageLite *msg) {
+  size_t size = msg->ByteSize();
+  return ::google::protobuf::io::CodedOutputStream::VarintSize32(size) + size;
+}
+
+static inline void ReadDelimitedPBMessage(::google::protobuf::io::CodedInputStream *in,
+                                          ::google::protobuf::MessageLite *msg) {
+  uint32_t size = 0;
+  in->ReadVarint32(&size);
+  auto limit = in->PushLimit(size);
+  msg->ParseFromCodedStream(in);
+  in->PopLimit(limit);
+}
+
+
 template <class Stream, class Message, size_t MaxMessageSize = 512>
 struct ReadPBMessageMonad : monad::Monad<> {
   ReadPBMessageMonad(Stream *stream, Message *msg)
