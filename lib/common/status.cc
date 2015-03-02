@@ -22,14 +22,29 @@
 
 namespace hdfs {
 
-Status::Status(int code, const char *msg) {
+Status::Status(int code, const char *msg1)
+    : state_(ConstructState(code, msg1, nullptr))
+{}
+
+Status::Status(int code, const char *msg1, const char *msg2)
+    : state_(ConstructState(code, msg1, msg2))
+{}
+
+const char *Status::ConstructState(int code, const char *msg1, const char *msg2) {
   assert(code != kOk);
-  const uint32_t len = strlen(msg);
-  char *result = new char[len + 5];
-  *reinterpret_cast<uint32_t*>(result) = len;
-  result[4] = static_cast<char>(code);
-  memcpy(result + 5, msg, len);
-  state_ = result;
+  const uint32_t len1 = strlen(msg1);
+  const uint32_t len2 = msg2 ? strlen(msg2) : 0;
+  const uint32_t size = len1 + (len2 ? (2 + len2) : 0);
+  char* result = new char[size + 8 + 2];
+  *reinterpret_cast<uint32_t*>(result) = size;
+  *reinterpret_cast<uint32_t*>(result + 4) = code;
+  memcpy(result + 8, msg1, len1);
+  if (len2) {
+    result[8 + len1] = ':';
+    result[9 + len1] = ' ';
+    memcpy(result + 10 + len1, msg2, len2);
+  }
+  return result;
 }
 
 std::string Status::ToString() const {
@@ -37,15 +52,15 @@ std::string Status::ToString() const {
     return "OK";
   } else {
     uint32_t length = *reinterpret_cast<const uint32_t*>(state_);
-    return std::string(state_ + 5, length);
+    return std::string(state_ + 8, length);
   }
 }
 
 const char* Status::CopyState(const char* state) {
   uint32_t size;
   memcpy(&size, state, sizeof(size));
-  char* result = new char[size + 5];
-  memcpy(result, state, size + 5);
+  char* result = new char[size + 8];
+  memcpy(result, state, size + 8);
   return result;
 }
 

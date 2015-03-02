@@ -19,6 +19,7 @@
 #define LIBHDFSPP_STATUS_H_
 
 #include <string>
+#include <system_error>
 
 namespace hdfs {
 
@@ -35,11 +36,16 @@ class Status {
 
   // Return a success status.
   static Status OK() { return Status(); }
-  static Status Unimplemented() { return Status(kUnimplemented, ""); }
+  static Status InvalidArgument(const char *msg)
+  { return Status(kInvalidArgument, msg); }
+  static Status Unimplemented()
+  { return Status(kUnimplemented, ""); }
   static Status Error(const char *msg)
   { return Status(kGenericError, msg); }
   static Status InvalidEncryptionKey(const char *msg)
   { return Status(kInvalidEncryptionKey, msg); }
+  static Status Exception(const char *expception_class_name, const char *error_message)
+  { return Status(kException, expception_class_name, error_message); }
 
   // Returns true iff the status indicates success.
   bool ok() const { return (state_ == NULL); }
@@ -62,12 +68,16 @@ class Status {
 
   enum Code {
     kOk = 0,
+    kInvalidArgument = static_cast<unsigned>(std::errc::invalid_argument),
     kGenericError = 1,
     kInvalidEncryptionKey = 2,
     kUnimplemented = 3,
+    kException = 256,
   };
 
-  static const char* CopyState(const char* s);
+  explicit Status(int code, const char *msg1, const char *msg2);
+  static const char *CopyState(const char* s);
+  static const char *ConstructState(int code, const char *msg1, const char *msg2);
 };
 
 inline Status::Status(const Status& s) {
