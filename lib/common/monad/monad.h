@@ -79,6 +79,35 @@ Bind<MA, MB> operator>>=(MA&& ma, MB&& mb) {
   clazz(const clazz &) = delete; \
   clazz& operator=(const clazz &) = delete
 
+
+/**
+ * Monads that have lambda methods to inline in the chained
+ * monads. Please be careful of capturing shared_ptr in the handler
+ * otherwise it can lead to memory leaks.
+ **/
+template<class Handler>
+struct InlineMonad : Monad<> {
+  InlineMonad(const Handler &handler)
+      : handler_(handler)
+  {}
+
+  HDFS_MONAD_DEFAULT_MOVE_CONSTRUCTOR(InlineMonad);
+  HDFS_MONAD_DISABLE_COPY_CONSTRUCTOR(InlineMonad);
+
+  template<class Next>
+  void Run(const Next& next) {
+    next(handler_());
+  }
+
+ private:
+  Handler handler_;
+};
+
+template<class Handler>
+InlineMonad<Handler> Inline(const Handler &handler) {
+  return InlineMonad<Handler>(handler);
+}
+
 }
 }
 
