@@ -23,54 +23,77 @@
 #include <google/protobuf/message_lite.h>
 
 #include <asio/ip/tcp.hpp>
+#include <asio/deadline_timer.hpp>
 
 #include <atomic>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace hdfs {
 
 class RpcEngine;
 
-struct RpcRequestBase {
-  const std::string method_name;
-  const std::unique_ptr<::google::protobuf::MessageLite> req;
-  RpcRequestBase(const char *method_name,
-                 std::unique_ptr<::google::protobuf::MessageLite> &&req);
-  virtual ~RpcRequestBase();
-};
-
 class RpcConnection {
  public:
   typedef ::asio::ip::tcp::socket NextLayer;
   RpcConnection(RpcEngine *engine);
   template <class Handler>
-  void Handshake(const Handler &handler);
-  template <class Handler>
   void Connect(const ::asio::ip::tcp::endpoint &server, const Handler &handler);
+  template <class Handler>
+  void Handshake(const Handler &handler);
   void Shutdown();
 
   template <class Handler>
-  void AsyncRpc(const std::shared_ptr<RpcRequestBase> &req,
+  void AsyncRpc(const char *method_name,
+                const std::shared_ptr<::google::protobuf::MessageLite> &req,
                 const std::shared_ptr<::google::protobuf::MessageLite> &resp,
                 const Handler &handler);
   NextLayer &next_layer()
   { return next_layer_; }
 
+  void StartReadLoop();
+
  private:
+  class RequestBase;
+  template <class Handler>
+  class Request;
+  
   RpcEngine * const engine_;
+  NextLayer next_layer_;
   enum {
     kCallIdAuthorizationFailed = -1,
     kCallIdInvalid = -2,
     kCallIdConnectionContext = -3,
-    kPingCallId = -4
+    kCallIdPing = -4
   };
-  NextLayer next_layer_;
 
-  struct RpcSend;
-  struct RpcRecv;
+  struct ResponseState {
+    enum {
+      kReadLength,
+      kReadContent,
+      kParseResponse,
+    } state;
+    unsigned length;
+    std::vector<char> data;
+    ResponseState();
+  };
+  ResponseState response_state_;
 
+  // The request being sent over the wire
+  std::shared_ptr<RequestBase> request_over_the_wire_;
+  // Requests to be sent over the wire
+  std::vector<std::shared_ptr<RequestBase> > pending_requests_;
+  // Requests that are waiting for responses
+  std::unordered_map<int, std::shared_ptr<RequestBase> > requests_on_fly_;
+
+  ::asio::io_service &io_service();
   void PrepareHandshakePacket(std::string *result);
+  std::shared_ptr<std::string> SerializeRpcRequest(const std::shared_ptr<RequestBase> &req);
+  void HandleRpcResponse(const std::vector<char> &data);
+  void OnHandleWrite(const ::asio::error_code &ec, size_t transferred);
+  void OnHandleRead(const ::asio::error_code &ec, size_t transferred);
+  void StartWriteLoop();
 };
 
 class RpcEngine {
@@ -97,7 +120,8 @@ class RpcEngine {
   const std::string &protocol_name() const { return protocol_name_; }
   int protocol_version() const { return protocol_version_; }
   RpcConnection &connection() { return conn_; }
-  ::asio::io_service *io_service() { return io_service_; }
+  ::asio::io_service &io_service() { return *io_service_; }
+
  private:
   ::asio::io_service *io_service_;
   const std::string client_name_;
@@ -105,9 +129,6 @@ class RpcEngine {
   const int protocol_version_;
   std::atomic_int call_id_;
   RpcConnection conn_;
-
-  std::vector<std::shared_ptr<RpcRequestBase> > requests_;
-  struct AcquireConnection;
 };
 
 }

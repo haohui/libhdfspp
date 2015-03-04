@@ -34,18 +34,4 @@ void RpcEngine::Shutdown() {
   io_service_->post([this]() { conn_.Shutdown(); });
 }
 
-RpcRequestBase::RpcRequestBase(
-    const char *method_name,
-    std::unique_ptr<::google::protobuf::MessageLite> &&req)
-    : method_name(method_name)
-    , req(std::move(req))
-{}
-
-RpcRequestBase::~RpcRequestBase() {}
-
-RpcConnection::RpcConnection(RpcEngine *engine)
-    : engine_(engine)
-    , next_layer_(*engine->io_service())
-{}
-
 }

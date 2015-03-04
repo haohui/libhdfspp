@@ -8,10 +8,10 @@ int main(int argc, char *argv[]) {
   using namespace hdfs;
   using namespace ::hadoop::hdfs;
   using ::asio::ip::tcp;
-  
+
   ::asio::io_service io_service;
   if (argc != 4) {
-    std::cerr 
+    std::cerr
         << "Test whehter a file exists on the HDFS cluster.\n"
         << "Usage: " << argv[0] << " "
         << "<nnhost> <nnport> <file>\n";
@@ -19,36 +19,35 @@ int main(int argc, char *argv[]) {
   }
 
   RpcEngine engine(&io_service, "libhdfs++", "org.apache.hadoop.hdfs.protocol.ClientProtocol", 1);
-  GetFileInfoRequestProto *req_proto = new GetFileInfoRequestProto();
-  req_proto->set_src(argv[3]);
-  
-  std::shared_ptr<RpcRequestBase> req = std::make_shared<RpcRequestBase>(
-      "getFileInfo",
-      std::move(std::unique_ptr<::google::protobuf::MessageLite>(req_proto)));
-
+  auto req = std::make_shared<GetFileInfoRequestProto>();
   auto resp = std::make_shared<GetFileInfoResponseProto>();
+  req->set_src(argv[3]);
+
   RpcConnection *conn = &engine.connection();
 
   tcp::resolver resolver(io_service);
   tcp::resolver::query query(tcp::v4(), argv[1], argv[2]);
   tcp::resolver::iterator iterator = resolver.resolve(query);
 
-  conn->Connect(*iterator, [conn,req,resp](const Status &status) {
+  conn->Connect(*iterator, [conn,req,resp,&io_service](const Status &status) {
       if (!status.ok()) {
         std::cerr << "Connection failed: "<< status.ToString() << std::endl;
         return;
       }
-      conn->Handshake([conn,req,resp](const Status &status) {
+      conn->Handshake([conn,req,resp,&io_service](const Status &status) {
           if (!status.ok()) {
             std::cerr << "Handshake failed: "<< status.ToString() << std::endl;
             return;
           }
-          conn->AsyncRpc(req, resp, [resp](const Status &status) {
+          conn->StartReadLoop();
+          conn->AsyncRpc("getFileInfo", req, resp, [resp,&io_service](const Status &status) {
               if (!status.ok()) {
                 std::cerr << "Async RPC Failed: "<< status.ToString() << std::endl;
+                io_service.post([&io_service](){ io_service.stop(); });
                 return;
               }
               std::cerr << "File exists: " << resp->has_fs() << std::endl;
+              io_service.post([&io_service](){ io_service.stop(); });
             });
         });
     });

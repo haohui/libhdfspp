@@ -21,77 +21,43 @@
 #include "RpcHeader.pb.h"
 
 #include "common/util.h"
-#include "common/monad/monad.h"
-#include "common/monad/bind.h"
-#include "common/monad/asio.h"
 
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
 #include <asio/connect.hpp>
+#include <asio/write.hpp>
 
 namespace hdfs {
 
-struct RpcConnection::RpcSend : monad::Monad<> {
-  RpcSend(RpcConnection *parent, const std::shared_ptr<RpcRequestBase> &req)
-      : parent_(parent)
-      , req_(req)
-  {}
-
-  template<class Next>
-  void Run(const Next& next) {
-    SerializeRpcRequest();
-    auto asio_buf_op = [this]() { return asio::buffer(buf_); };
-    typedef monad::WriteMonad<NextLayer, decltype(asio_buf_op)> WriteOperation;
-    auto write_monad = std::make_shared<WriteOperation>(&parent_->next_layer(), asio_buf_op);
-    write_monad->Run([write_monad,next](const Status &status) { next(status); });
-  }
-
-  HDFS_MONAD_DEFAULT_MOVE_CONSTRUCTOR(RpcSend);
-  HDFS_MONAD_DISABLE_COPY_CONSTRUCTOR(RpcSend);
-
- private:
-  RpcConnection *parent_;
+class RpcConnection::RequestBase {
+ public:
   const std::string method_name_;
-  std::string buf_;
-  std::shared_ptr<RpcRequestBase> req_;
-
-  typedef ::google::protobuf::MessageLite Message;
-  void SerializeRpcRequest();
+  const std::shared_ptr<::google::protobuf::MessageLite> req_;
+  const std::shared_ptr<::google::protobuf::MessageLite> resp_;
+  const int call_id_;
+  ::asio::deadline_timer timeout_timer_;
+  RequestBase(RpcConnection *parent,
+              const char *method_name,
+              const std::shared_ptr<::google::protobuf::MessageLite> &req,
+              const std::shared_ptr<::google::protobuf::MessageLite> &resp);
+  virtual void InvokeCallback(const Status &status) = 0;
+  virtual ~RequestBase();
 };
 
-
-struct RpcConnection::RpcRecv : monad::Monad<> {
-  RpcRecv(RpcConnection *parent, const std::shared_ptr<::google::protobuf::MessageLite> &resp)
-      : parent_(parent)
-      , resp_(resp)
+template <class Handler>
+class RpcConnection::Request : public RequestBase {
+ public:
+  Request(RpcConnection *parent,
+          const char *method_name,
+          const std::shared_ptr<::google::protobuf::MessageLite> &req,
+          const std::shared_ptr<::google::protobuf::MessageLite> &resp,
+          const Handler &handler)
+      : RequestBase(parent, method_name, req, resp)
+      , handler_(handler)
   {}
-
-  template<class Next>
-  void Run(const Next& next) {
-    len_ = 0;
-    auto prog = monad::Read(&parent_->next_layer(),
-                            ::asio::buffer(reinterpret_cast<char*>(&len_), sizeof(len_)))
-            >>= monad::Inline(std::bind(&RpcRecv::ReserveBuffer, this))
-            >>= monad::LateBindRead(&parent_->next_layer(),
-                                    [this]() { return ::asio::buffer(data_); })
-            >>= monad::Inline(std::bind(&RpcRecv::ParseRpcPacket, this));
-
-    auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
-    m->Run([m,next](const Status &status) { next(status); });
-  }
-
-  HDFS_MONAD_DEFAULT_MOVE_CONSTRUCTOR(RpcRecv);
-  HDFS_MONAD_DISABLE_COPY_CONSTRUCTOR(RpcRecv);
-
- private:
-  RpcConnection *parent_;
-  std::shared_ptr<::google::protobuf::MessageLite> resp_;
-  int len_;
-  std::vector<char> data_;
-  Status ReserveBuffer();
-  Status ReceiveRpcPacket();
-  Status ParseRpcPacket();
+  void InvokeCallback(const Status &status) { handler_(status); }
+  Handler handler_;
 };
 
 template <class Handler>
@@ -103,30 +69,22 @@ void RpcConnection::Connect(const ::asio::ip::tcp::endpoint &server, const Handl
 
 template <class Handler>
 void RpcConnection::Handshake(const Handler &handler) {
-  typedef monad::EarlyBindWriteOperation<NextLayer, ::asio::const_buffers_1> WriteOperation;
-  class State {
-   public:
-    std::string payload_;
-    WriteOperation monad_;
-    State(std::string &&payload, NextLayer *next_layer)
-        : payload_(payload)
-        , monad_(std::move(monad::Write(next_layer, asio::buffer(payload_))))
-    {}
-  };
+  auto handshake_packet = std::make_shared<std::string>();
+  PrepareHandshakePacket(handshake_packet.get());
 
-  std::string payload;
-  PrepareHandshakePacket(&payload);
-  auto s = std::make_shared<State>(std::move(payload), &next_layer_);
-  s->monad_.Run([s, handler](const Status &status) { handler(status); });
+  ::asio::async_write(next_layer(), asio::buffer(*handshake_packet),
+                      [handshake_packet, handler](const ::asio::error_code &ec, size_t)
+                      { handler(ToStatus(ec)); });
 }
 
 template <class Handler>
-void RpcConnection::AsyncRpc(const std::shared_ptr<RpcRequestBase> &req,
+void RpcConnection::AsyncRpc(const char *method_name,
+                             const std::shared_ptr<::google::protobuf::MessageLite> &req,
                              const std::shared_ptr<::google::protobuf::MessageLite> &resp,
                              const Handler &handler) {
-  auto prog = RpcSend(this, req) >>= RpcRecv(this, resp);
-  auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
-  m->Run([m,handler](const Status &status) { handler(status); });
+  auto r = new Request<Handler>(this, method_name, req, resp, handler);
+  pending_requests_.push_back(std::shared_ptr<RequestBase>(r));
+  StartWriteLoop();
 }
 
 }
