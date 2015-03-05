@@ -36,7 +36,7 @@ class RpcConnection::RequestBase {
   const std::shared_ptr<::google::protobuf::MessageLite> req_;
   const std::shared_ptr<::google::protobuf::MessageLite> resp_;
   const int call_id_;
-  ::asio::deadline_timer timeout_timer_;
+  // ::asio::deadline_timer timeout_timer_;
   RequestBase(RpcConnection *parent,
               const char *method_name,
               const std::shared_ptr<::google::protobuf::MessageLite> &req,
