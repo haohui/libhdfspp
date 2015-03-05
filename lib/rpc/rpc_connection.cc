@@ -64,7 +64,7 @@ RpcConnection::RequestBase::RequestBase(
     , req_(req)
     , resp_(resp)
     , call_id_(parent->engine_->NextCallId())
-    , timeout_timer_(parent->io_service())
+      // , timeout_timer_(parent->io_service())
 {}
 
 RpcConnection::RequestBase::~RequestBase() {}
