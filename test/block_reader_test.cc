@@ -40,7 +40,7 @@ class BlockReaderTest : public testing::Test {
     Test::TearDown();
   }
 
-  int AsyncBlockRead(const std::string &bpid, const long blockid, const long generationstamp,
+  int AsyncBlockRead(const std::string &bpid, const uint64_t blockid, const uint64_t generationstamp,
     const size_t size, const size_t offset, const std::string &dnhost, const std::string &dnport,
     std::string &contents) {
 
@@ -116,8 +116,8 @@ TEST_F(BlockReaderTest, AsyncReadFirstBlock) {
   block_info blockInfo = info.blocks[0];
   
   std::string bpid = blockInfo.blockPoolId;
-  unsigned long long blockid = blockInfo.blockId;
-  unsigned long long generationstamp = blockInfo.generationStamp;
+  uint64_t blockid = blockInfo.blockId;
+  uint64_t generationstamp = blockInfo.generationStamp;
   size_t size = info.fileLength;
   size_t offset = 0;
   std::string dnport = std::to_string(info.locations[0].xferPort);
@@ -147,8 +147,8 @@ TEST_F(BlockReaderTest, AsyncReadPartialBlock) {
   block_info blockInfo = info.blocks[0];
   
   std::string bpid = blockInfo.blockPoolId;
-  unsigned long long blockid = blockInfo.blockId;
-  unsigned long long generationstamp = blockInfo.generationStamp;
+  uint64_t blockid = blockInfo.blockId;
+  uint64_t generationstamp = blockInfo.generationStamp;
   size_t size = info.fileLength - 2;
   size_t offset = 0;
   std::string dnport = std::to_string(info.locations[0].xferPort);
@@ -183,8 +183,8 @@ TEST_F(BlockReaderTest, DISABLED_AsyncReadFromMiddle) {
   block_info blockInfo = info.blocks[0];
   
   std::string bpid = blockInfo.blockPoolId;
-  unsigned long long blockid = blockInfo.blockId;
-  unsigned long long generationstamp = blockInfo.generationStamp;
+  uint64_t blockid = blockInfo.blockId;
+  uint64_t generationstamp = blockInfo.generationStamp;
   size_t size = info.fileLength;
   size_t offset = size/2;
   std::string dnport = std::to_string(info.locations[0].xferPort);
@@ -213,8 +213,8 @@ TEST_F(BlockReaderTest, AsyncReadAll) {
     block_info blockInfo = *it;
 
     std::string bpid = blockInfo.blockPoolId;
-    unsigned long long blockid = blockInfo.blockId;
-    unsigned long long generationstamp = blockInfo.generationStamp;
+    uint64_t blockid = blockInfo.blockId;
+    uint64_t generationstamp = blockInfo.generationStamp;
     size_t size = info.fileLength;
     size_t offset = 0;
     
