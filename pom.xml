@@ -128,6 +128,27 @@
     </pluginManagement>
     <plugins>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>native-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>compile</phase>
+            <goals>
+              <goal>javah</goal>
+            </goals>
+            <configuration>
+              <javahPath>${env.JAVA_HOME}/bin/javah</javahPath>
+              <javahClassNames>
+                <javahClassName>me.haohui.libhdfspp.NativeIoService</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeTcpConnection</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeRemoteBlockReader</javahClassName>
+              </javahClassNames>
+              <javahOutputDirectory>${project.build.directory}/libhdfspp/javah</javahOutputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <groupId>com.googlecode.cmake-maven-project</groupId>
         <artifactId>cmake-maven-plugin</artifactId>
         <executions>
@@ -156,6 +177,14 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <forkMode>once</forkMode>
+          <argLine>-Djava.library.path=${project.build.directory}/libhdfspp/bindings/java</argLine>
+        </configuration>
       </plugin>
     </plugins>
   </build>
