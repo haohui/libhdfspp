@@ -19,6 +19,7 @@
 #define BLOCK_READER_H_
 
 #include "libhdfs++/options.h"
+#include "libhdfs++/status.h"
 #include "datatransfer.pb.h"
 
 #include <memory>
@@ -29,7 +30,7 @@ template<class Stream>
 class RemoteBlockReader {
  public:
   explicit RemoteBlockReader(const BlockReaderOptions &options,
-                             std::shared_ptr<Stream> stream)
+                             Stream *stream)
       : stream_(stream)
       , state_(kOpen)
       , options_(options)
@@ -39,12 +40,21 @@ class RemoteBlockReader {
   void async_read_some(const MutableBufferSequence& buffers,
                        const ReadHandler &handler);
 
+  template<class MutableBufferSequence>
+  size_t read_some(const MutableBufferSequence &buffers, Status *status);
+
+  Status connect(const std::string &client_name,
+                 const hadoop::common::TokenProto *token,
+                 const hadoop::hdfs::ExtendedBlockProto *block,
+                 uint64_t length, uint64_t offset);
+
   template<class ConnectHandler>
   void async_connect(const std::string &client_name,
                  const hadoop::common::TokenProto *token,
                  const hadoop::hdfs::ExtendedBlockProto *block,
                  uint64_t length, uint64_t offset,
                  const ConnectHandler &handler);
+
  private:
   struct ReadPacketHeader;
   struct ReadChecksum;
@@ -58,7 +68,7 @@ class RemoteBlockReader {
     kFinished,
   };
 
-  std::shared_ptr<Stream> stream_;
+  Stream *stream_;
   hadoop::hdfs::PacketHeaderProto header_;
   State state_;
   BlockReaderOptions options_;
