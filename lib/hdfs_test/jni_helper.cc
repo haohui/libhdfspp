@@ -1,4 +1,5 @@
 #include "jni_helper.h"
+#include <cstring>
 
 namespace hdfs {
 
