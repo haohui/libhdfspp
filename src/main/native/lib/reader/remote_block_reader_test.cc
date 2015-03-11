@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
   asio::connect(*s.get(), iterator);
 
   BlockReaderOptions options;
-  RemoteBlockReader<tcp::socket> reader(options, s);
+  RemoteBlockReader<tcp::socket> reader(options, s.get());
   std::unique_ptr<char[]> buf(new char[size]);
   reader.async_connect("libhdfs++", nullptr, &block, size, offset, [&buf,&reader,size](const Status &status) {
       if (!status.ok()) {

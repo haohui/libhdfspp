@@ -32,7 +32,7 @@
 
 #include <arpa/inet.h>
 
-#include <iostream>
+#include <future>
 
 namespace hdfs {
 
@@ -66,8 +66,8 @@ void RemoteBlockReader<Stream>::async_connect(const std::string &client_name,
   s->request.insert(s->request.begin(), { 0, kDataTransferVersion, Operation::kReadBlock });
   AppendToDelimitedString(&p, &s->request);
 
-  auto prog = monad::Write(stream_.get(), asio::buffer(s->request))
-          >>= ReadPBMessage(stream_.get(), &s->response);
+  auto prog = monad::Write(stream_, asio::buffer(s->request))
+          >>= ReadPBMessage(stream_, &s->response);
 
   auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
   m->Run([m,s,this,handler](const Status &status) {
@@ -223,7 +223,7 @@ struct RemoteBlockReader<Stream>::AckRead : monad::Monad<> {
                  hadoop::hdfs::Status::CHECKSUM_OK : hadoop::hdfs::Status::SUCCESS);
     auto req = std::make_shared<std::string>();
     AppendToDelimitedString(&p, req.get());
-    auto prog = monad::Write(self_->stream_.get(), asio::buffer(*req));
+    auto prog = monad::Write(self_->stream_, asio::buffer(*req));
     auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
     m->Run([m,req,next,this](const Status &status) {
         if (status.ok()) {
@@ -259,6 +259,32 @@ void RemoteBlockReader<Stream>::async_read_some(const MutableBufferSequence& buf
   m->Run([m,this,handler,bytes_transferred](const Status &status) {
       handler(status, *bytes_transferred);
     });
+}
+
+template<class Stream>
+template<class MutableBufferSequence>
+size_t RemoteBlockReader<Stream>::read_some(const MutableBufferSequence& buffers, Status *status) {
+  size_t transferred = 0;
+  std::promise<bool> done;
+  async_read_some(buffers, [status,&transferred,&done](const Status &stat, size_t t) {
+      *status = stat;
+      transferred = t;
+      done.set_value(true);
+    });
+  done.get_future().wait();
+  return transferred;
+}
+
+template<class Stream>
+Status RemoteBlockReader<Stream>::connect(const std::string &client_name,
+                                          const hadoop::common::TokenProto *token,
+                                          const hadoop::hdfs::ExtendedBlockProto *block,
+                                          uint64_t length, uint64_t offset) {
+  std::promise<Status> done;
+  async_connect(client_name, token, block, length, offset, [&done](const Status &status) {
+      done.set_value(status);
+    });
+  return done.get_future().get();
 }
 
 }

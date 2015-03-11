@@ -45,3 +45,4 @@ endif(DOXYGEN_FOUND)
 
 add_subdirectory(lib)
 add_subdirectory(third_party/gtest-1.7.0)
+add_subdirectory(bindings/java)
