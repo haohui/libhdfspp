@@ -25,7 +25,6 @@
 
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
-#include <iostream>
 
 namespace hdfs {
 
@@ -122,17 +121,6 @@ void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
   request_over_the_wire_ = req;
 
   // TODO: set the timeout for the RPC request
-  typedef std::chrono::duration<int> seconds_type;
-  req->timeout_timer_.expires_from_now(seconds_type(30));
-  req->timeout_timer_.async_wait([this, req](const ::asio::error_code &ec) {
-	  auto it = this->requests_on_fly_.find(req->call_id_);
-	  // wait too long to get response
-	  if (it != this->requests_on_fly_.end()) {
-		  //clean request waiting for response
-		  this->requests_on_fly_.erase(req->call_id_);
-		  std::cerr << "rpc request timed out" << std::endl;
-	  }
-  });
 
   std::shared_ptr<std::string> buf = SerializeRpcRequest(req);
   asio::async_write(next_layer(), asio::buffer(*buf),
