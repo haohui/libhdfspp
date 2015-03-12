@@ -26,6 +26,8 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
+#include <iostream>
+
 namespace hdfs {
 
 namespace pb = ::google::protobuf;
@@ -103,6 +105,27 @@ std::shared_ptr<std::string> RpcConnection::SerializeRpcRequest(
   return res;
 }
 
+void RpcConnection::OnHandleRpcTimeout(const ::asio::error_code &ec,
+		std::shared_ptr<RequestBase> req) {
+
+	req->timeout_timer_.cancel();
+
+	auto it = requests_on_fly_.find(req->call_id_);
+	if (it != requests_on_fly_.end()) { // wait too long to get response
+		//clean request waiting for response
+		requests_on_fly_.erase(req->call_id_);
+		std::cerr << "rpc request timed out" << std::endl;
+
+		Status stat;
+		if (!next_layer().is_open()) { // bad connection
+			stat = Status::BadConnection(ec.message().c_str());
+		} else {
+			stat = Status::RpcTimeout(ec.message().c_str());
+		}
+		req->InvokeCallback(stat);
+	}
+}
+
 void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
   request_over_the_wire_.reset();
   if (ec) {
@@ -120,7 +143,10 @@ void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
   requests_on_fly_[req->call_id_] = req;
   request_over_the_wire_ = req;
 
-  // TODO: set the timeout for the RPC request
+  // set the timeout for the RPC request
+  req->timeout_timer_.expires_from_now(seconds_type(30));
+  req->timeout_timer_.async_wait(
+    		  std::bind(&RpcConnection::OnHandleRpcTimeout, this, ::asio::error_code(), req));
 
   std::shared_ptr<std::string> buf = SerializeRpcRequest(req);
   asio::async_write(next_layer(), asio::buffer(*buf),
