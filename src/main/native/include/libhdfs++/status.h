@@ -41,6 +41,13 @@ class Status {
   { return Status(kInvalidArgument, msg); }
   static Status Unimplemented()
   { return Status(kUnimplemented, ""); }
+
+  static Status RpcTimeout(const char *msg)
+  { return Status(kRpcTimeout, msg); }
+
+  static Status BadConnection(const char *msg)
+    { return Status(kBadConnection, msg); }
+
   static Status Error(const char *msg)
   { return Status(kGenericError, msg); }
   static Status InvalidEncryptionKey(const char *msg)
@@ -74,6 +81,8 @@ class Status {
     kGenericError = 1,
     kInvalidEncryptionKey = 2,
     kUnimplemented = 3,
+	kRpcTimeout = 4,
+	kBadConnection = 5,
     kException = 256,
   };
 
@@ -90,7 +99,9 @@ inline void Status::operator=(const Status& s) {
   // The following condition catches both aliasing (when this == &s),
   // and the common case where both s and *this are ok.
   if (state_ != s.state_) {
-    delete[] state_;
+    if (state_){
+	  delete[] state_;
+    }
     state_ = (s.state_ == NULL) ? NULL : CopyState(s.state_);
   }
 }
