@@ -23,6 +23,7 @@
 
 namespace hdfs {
 
+class StatusHelper;
 class Status {
  public:
   // Create a success status.
@@ -65,6 +66,7 @@ class Status {
   //    state_[4]    == code
   //    state_[5..]  == message
   const char* state_;
+  friend class StatusHelper;
 
   enum Code {
     kOk = 0,
