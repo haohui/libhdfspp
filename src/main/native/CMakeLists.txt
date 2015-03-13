@@ -28,7 +28,7 @@ include_directories(lib)
 
 add_definitions(-DASIO_STANDALONE)
 if(UNIX)
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -std=c++11 -g -fPIC")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -std=c++11 -g -fPIC -fno-strict-aliasing")
 endif()
 
 if(APPLE)
