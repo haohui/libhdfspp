@@ -147,6 +147,7 @@
                 <javahClassName>me.haohui.libhdfspp.NativeIoService</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeTcpConnection</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeRemoteBlockReader</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeRpcEngine</javahClassName>
               </javahClassNames>
               <javahOutputDirectory>${project.build.directory}/libhdfspp/javah</javahOutputDirectory>
             </configuration>

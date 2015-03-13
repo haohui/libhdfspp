@@ -23,6 +23,10 @@ import java.lang.Exception;
 import java.lang.Override;
 
 class NativeIoService implements Closeable {
+  static {
+    System.loadLibrary("hdfsppjni");
+  }
+
   private final long handle;
   long handle() {
     return handle;

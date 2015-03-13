@@ -45,10 +45,17 @@ class RpcConnection {
   void Shutdown();
 
   template <class Handler>
-  void AsyncRpc(const char *method_name,
-                const std::shared_ptr<::google::protobuf::MessageLite> &req,
-                const std::shared_ptr<::google::protobuf::MessageLite> &resp,
+  void AsyncRpc(const std::string &method_name,
+                const ::google::protobuf::MessageLite *req,
+                std::shared_ptr<::google::protobuf::MessageLite> resp,
                 const Handler &handler);
+
+  template <class Handler>
+  void AsyncRawRpc(const std::string &method_name,
+                   const std::string &request,
+                   std::shared_ptr<std::string> resp,
+                   const Handler &handler);
+
   NextLayer &next_layer()
   { return next_layer_; }
 
@@ -87,9 +94,12 @@ class RpcConnection {
   // Requests that are waiting for responses
   std::unordered_map<int, std::shared_ptr<RequestBase> > requests_on_fly_;
 
+  template <class Handler>
+  void StartRpc(std::string &&request, const Handler &handler);
+
   ::asio::io_service &io_service();
-  void PrepareHandshakePacket(std::string *result);
-  std::shared_ptr<std::string> SerializeRpcRequest(const std::shared_ptr<RequestBase> &req);
+  std::shared_ptr<std::string> PrepareHandshakePacket();
+  static std::string SerializeRpcRequest(const std::string &method_name, const ::google::protobuf::MessageLite *req);
   void HandleRpcResponse(const std::vector<char> &data);
   void OnHandleWrite(const ::asio::error_code &ec, size_t transferred);
   void OnHandleRead(const ::asio::error_code &ec, size_t transferred);
@@ -103,14 +113,28 @@ class RpcEngine {
   };
 
   RpcEngine(::asio::io_service *io_service,
-            const char *client_name,
+            const std::string &client_name,
             const char *protocol_name, int protocol_version);
 
   template <class Handler>
-  void AsyncRpc(const char *method_name, const ::google::protobuf::MessageLite &req,
-                const Handler &&handler);
+  void AsyncRpc(const std::string &method_name,
+                const ::google::protobuf::MessageLite *req,
+                const std::shared_ptr<::google::protobuf::MessageLite> &resp,
+                const Handler &handler) {
+    conn_.AsyncRpc(method_name, req, resp, handler);
+  }
 
+  Status Rpc(const std::string &method_name,
+             const ::google::protobuf::MessageLite *req,
+             const std::shared_ptr<::google::protobuf::MessageLite> &resp);
+  /**
+   * Send raw bytes as RPC payload. This is intended to be used in JNI
+   * bindings only.
+   **/
+  Status RawRpc(const std::string &method_name, const std::string &req,
+                std::shared_ptr<std::string> resp);
   Status Connect(const ::asio::ip::tcp::endpoint &server);
+  void StartReadLoop();
   void Shutdown();
 
   int NextCallId()

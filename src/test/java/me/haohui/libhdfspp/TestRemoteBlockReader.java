@@ -37,10 +37,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 public class TestRemoteBlockReader {
-  static {
-    System.loadLibrary("hdfsppjni");
-  }
-
   private static HdfsConfiguration conf;
   private static MiniDFSCluster cluster;
   private static DistributedFileSystem fs;
