@@ -94,31 +94,31 @@ public class TestRemoteBlockReader {
   }
 
   @Test
-  public void testReadWholeBlock() throws IOException {
+  public void testReadWholeBlock() throws IOException, InterruptedException {
     BlockLocation[] locs = fs.getFileBlockLocations(new Path(FILENAME), 0,
                                                     CONTENT_SIZE);
     LocatedBlock lb = ((HdfsBlockLocation) locs[0]).getLocatedBlock();
     ExtendedBlock eb = lb.getBlock();
-    try (NativeIoService ioService = new NativeIoService()) {
-      IoServiceExecutor executor = new IoServiceExecutor(ioService);
-      try (NativeTcpConnection conn = new NativeTcpConnection(ioService)) {
-        conn.connect(cluster.getDataNodes().get(0).getXferAddress());
-        try (NativeRemoteBlockReader reader = new NativeRemoteBlockReader
-            (conn)) {
-          reader.connect(CLIENT_NAME, null, eb, BLOCK_SIZE, 0);
-          ByteBuffer buf = ByteBuffer.allocateDirect(BLOCK_SIZE);
-          int transferred = reader.read(buf);
-          Assert.assertEquals(BLOCK_SIZE, transferred);
-          buf.position(buf.position() + transferred);
-          buf.flip();
-          byte[] data = new byte[BLOCK_SIZE];
-          buf.get(data);
-          byte[] origData = new byte[BLOCK_SIZE];
-          System.arraycopy(CONTENTS, 0, origData, 0, origData.length);
-          Assert.assertArrayEquals(origData, data);
-        }
+    try (NativeIoService ioService = new NativeIoService();
+         IoServiceExecutor executor = new IoServiceExecutor(ioService);
+         NativeTcpConnection conn = new NativeTcpConnection(ioService)
+    ) {
+      executor.start();
+      conn.connect(cluster.getDataNodes().get(0).getXferAddress());
+      try (NativeRemoteBlockReader reader = new NativeRemoteBlockReader
+          (conn)) {
+        reader.connect(CLIENT_NAME, null, eb, BLOCK_SIZE, 0);
+        ByteBuffer buf = ByteBuffer.allocateDirect(BLOCK_SIZE);
+        int transferred = reader.read(buf);
+        Assert.assertEquals(BLOCK_SIZE, transferred);
+        buf.position(buf.position() + transferred);
+        buf.flip();
+        byte[] data = new byte[BLOCK_SIZE];
+        buf.get(data);
+        byte[] origData = new byte[BLOCK_SIZE];
+        System.arraycopy(CONTENTS, 0, origData, 0, origData.length);
+        Assert.assertArrayEquals(origData, data);
       }
-      executor.stop();
     }
   }
 }
