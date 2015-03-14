@@ -37,6 +37,7 @@ class RpcEngine;
 class RpcConnection {
  public:
   typedef ::asio::ip::tcp::socket NextLayer;
+  typedef std::chrono::duration<int> seconds_type;
   RpcConnection(RpcEngine *engine);
   template <class Handler>
   void Connect(const ::asio::ip::tcp::endpoint &server, const Handler &handler);
@@ -103,6 +104,7 @@ class RpcConnection {
   void HandleRpcResponse(const std::vector<char> &data);
   void OnHandleWrite(const ::asio::error_code &ec, size_t transferred);
   void OnHandleRead(const ::asio::error_code &ec, size_t transferred);
+  void OnHandleRpcTimeout(const ::asio::error_code &ec, std::shared_ptr<RequestBase> req);
   void StartWriteLoop();
 };
 
