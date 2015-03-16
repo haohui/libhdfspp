@@ -90,8 +90,23 @@ public class TestRemoteBlockReaderCase {
   protected void testReadBlockCase(LocatedBlock lb, int readOffset, int readLength)
       throws IOException, InterruptedException {
     ExtendedBlock eb = lb.getBlock();
-    try (NativeIoService ioService = new NativeIoService();
-         IoServiceExecutor executor = new IoServiceExecutor(ioService);
+    try (NativeIoService ioService = new NativeIoService()
+    ) {
+      testReadBlockCase(ioService, lb, readOffset, readLength);
+    }
+  }
+
+  protected LocatedBlock getFirstLocatedBlock() throws IOException {
+    BlockLocation[] locs = fs.getFileBlockLocations(new Path(FILENAME), 0,
+        CONTENT_SIZE);
+    return ((HdfsBlockLocation) locs[0]).getLocatedBlock();
+  }
+
+  protected void testReadBlockCase(NativeIoService ioService, LocatedBlock lb,
+        int readOffset, int readLength)
+      throws IOException, InterruptedException {
+    ExtendedBlock eb = lb.getBlock();
+    try (IoServiceExecutor executor = new IoServiceExecutor(ioService);
          NativeTcpConnection conn = new NativeTcpConnection(ioService)
     ) {
       executor.start();
@@ -111,12 +126,6 @@ public class TestRemoteBlockReaderCase {
         Assert.assertArrayEquals(origData, data);
       }
     }
-  }
-
-  protected LocatedBlock getFirstLocatedBlock() throws IOException {
-    BlockLocation[] locs = fs.getFileBlockLocations(new Path(FILENAME), 0,
-        CONTENT_SIZE);
-    return ((HdfsBlockLocation) locs[0]).getLocatedBlock();
   }
 
   private static byte[] GetCharacterTable() {
