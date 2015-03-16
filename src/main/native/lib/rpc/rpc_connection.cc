@@ -26,8 +26,6 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
-#include <iostream>
-
 namespace hdfs {
 
 namespace pb = ::google::protobuf;
@@ -108,10 +106,7 @@ RpcConnection::RequestBase::RequestBase(
   ConstructPacket(&payload_, {&rpc_header, &req_header, request}, nullptr);
 }
 
-RpcConnection::RequestBase::~RequestBase() {
-  // 5. rpc timeout while request/response is finished normally
-  timer_.cancel();
-}
+RpcConnection::RequestBase::~RequestBase() {}
 
 RpcConnection::ResponseState::ResponseState()
     : state(kReadLength)
@@ -125,37 +120,6 @@ RpcConnection::RpcConnection(RpcEngine *engine)
 
 ::asio::io_service &RpcConnection::io_service() {
   return engine_->io_service();
-}
-
-// there are 5 cases for timeout
-// 1. rpc timeout while connection is reset
-// 2. rpc timeout while sending request
-// 3. rpc timeout while waiting too long to get response
-// 4. rpc timeout while processing response
-// 5. rpc timeout while request/response is finished normally
-void RpcConnection::OnHandleRpcTimeout(const ::asio::error_code &ec,
-    std::shared_ptr<RequestBase> req) {
-  auto s = &response_state_;
-  int code = Status::Code::kRpcTimeout;
-  std::string cause;
-  if (!next_layer().is_open()) {
-    code = Status::Code::kConnectionReset;
-    cause = "rpc timeout while connection is reset"; // 1. ...
-  } else if (req == request_over_the_wire_) {
-    cause = "rpc timeout while sending request"; // 2. ...
-  }  else if (
-      requests_on_fly_.find(req->call_id()) != requests_on_fly_.end()) {
-    cause = "rpc timeout while waiting too long to get response"; // 3. ...
-  } else if (s->state == ResponseState::kReadContent ||
-      s->state == ResponseState::kParseResponse) { // 4. ...
-    // do nothing
-  } else {}
-
-  if (!cause.empty()) {
-    requests_on_fly_.erase(req->call_id());
-    req->OnTimeoutCallBack(Status(code, cause.c_str(), ec.message().c_str()));
-    std::cerr <<  code << ": " << cause << std::endl;
-  }
 }
 
 void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
@@ -175,11 +139,7 @@ void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
   requests_on_fly_[req->call_id()] = req;
   request_over_the_wire_ = req;
 
-  // set the timeout for the RPC request
-  req->timer().expires_from_now(seconds_type(30));
-  req->timer().async_wait(
-      std::bind(&RpcConnection::OnHandleRpcTimeout, this, ::asio::error_code(),
-          req));
+  // TODO: set the timeout for the RPC request
 
   asio::async_write(next_layer(), asio::buffer(req->payload()),
                     std::bind(&RpcConnection::OnHandleWrite, this, _1, _2));

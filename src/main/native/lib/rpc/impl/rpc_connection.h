@@ -30,6 +30,7 @@
 #include <asio/write.hpp>
 
 namespace hdfs {
+
 class RpcConnection::RequestBase {
  public:
   int call_id() const { return call_id_; }
@@ -40,7 +41,6 @@ class RpcConnection::RequestBase {
   virtual void OnResponseArrived(
       ::google::protobuf::io::CodedInputStream *is,
       const Status &status) = 0;
-  virtual void OnTimeoutCallBack(const Status &status) = 0;
 
  protected:
   int call_id_;
@@ -56,7 +56,6 @@ class RpcConnection::RequestBase {
 template <class Handler>
 class RpcConnection::Request : public RequestBase {
  public:
-  typedef Handler HandlerType;
   Request(RpcConnection *parent, const std::string &method_name,
           const std::string &request,
           Handler &&handler)
@@ -75,10 +74,6 @@ class RpcConnection::Request : public RequestBase {
                                  const Status &status) override
   { handler_(is, status); }
 
-  virtual void OnTimeoutCallBack(const Status &status)
-  {/*TODO: need to invoke app-level handler, not wrapped_handler*/}
-
-private:
   Handler handler_;
 };
 
