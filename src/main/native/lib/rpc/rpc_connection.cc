@@ -26,8 +26,6 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 
-#include <iostream>
-
 namespace hdfs {
 
 namespace pb = ::google::protobuf;
@@ -36,38 +34,77 @@ namespace pbio = ::google::protobuf::io;
 using namespace ::hadoop::common;
 using namespace ::std::placeholders;
 
-static void ConstructRpcRequest(pbio::CodedOutputStream *os,
-                                std::initializer_list<const pb::MessageLite*> msgs) {
+static void
+ConstructPacket(std::string *res,
+                std::initializer_list<const pb::MessageLite*> headers,
+                const std::string *request) {
   int len = 0;
-  std::for_each(msgs.begin(), msgs.end(),
+  std::for_each(headers.begin(), headers.end(),
                 [&len](const pb::MessageLite *v) { len += DelimitedPBMessageSize(v); });
-  int net_len = htonl(len);
-  os->WriteRaw(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
-  uint8_t *buf = os->GetDirectBufferForNBytesAndAdvance(len);
-  if (buf) {
-    std::for_each(msgs.begin(), msgs.end(), [&buf](const pb::MessageLite *v) {
-        buf = pbio::CodedOutputStream::WriteVarint32ToArray(v->ByteSize(), buf);
-        buf = v->SerializeWithCachedSizesToArray(buf);
-    });
-  } else {
-    std::for_each(msgs.begin(), msgs.end(), [os, &buf](const pb::MessageLite *v) {
-        os->WriteVarint32(v->ByteSize());
-        v->SerializeWithCachedSizes(os);
-    });
+  if (request) {
+    len += pbio::CodedOutputStream::VarintSize32(request->size()) + request->size();
   }
+
+  int net_len = htonl(len);
+  res->reserve(res->size() + sizeof(net_len) + len);
+
+  pbio::StringOutputStream ss(res);
+  pbio::CodedOutputStream os(&ss);
+  os.WriteRaw(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
+
+  uint8_t *buf = os.GetDirectBufferForNBytesAndAdvance(len);
+  assert (buf && "Cannot allocate memory");
+
+  std::for_each(headers.begin(), headers.end(), [&buf](const pb::MessageLite *v) {
+      buf = pbio::CodedOutputStream::WriteVarint32ToArray(v->ByteSize(), buf);
+      buf = v->SerializeWithCachedSizesToArray(buf);
+    });
+
+  if (request) {
+    buf = pbio::CodedOutputStream::WriteVarint32ToArray(request->size(), buf);
+    buf = os.WriteStringToArray(*request, buf);
+  }
+}
+
+static void SetRequestHeader(RpcEngine *engine, int call_id,
+                              const std::string &method_name,
+                              RpcRequestHeaderProto *rpc_header,
+                              RequestHeaderProto *req_header) {
+  rpc_header->set_rpckind(RPC_PROTOCOL_BUFFER);
+  rpc_header->set_rpcop(RpcRequestHeaderProto::RPC_FINAL_PACKET);
+  rpc_header->set_callid(call_id);
+  rpc_header->set_clientid(engine->client_name());
+
+  req_header->set_methodname(method_name);
+  req_header->set_declaringclassprotocolname(engine->protocol_name());
+  req_header->set_clientprotocolversion(engine->protocol_version());
 }
 
 RpcConnection::RequestBase::RequestBase(
     RpcConnection *parent,
-    const char *method_name,
-    const std::shared_ptr<::google::protobuf::MessageLite> &req,
-    const std::shared_ptr<::google::protobuf::MessageLite> &resp)
-    : method_name_(method_name)
-    , req_(req)
-    , resp_(resp)
-    , call_id_(parent->engine_->NextCallId())
-    , timeout_timer_(parent->io_service())
-{}
+    const std::string &method_name,
+    const std::string &request)
+    : call_id_(parent->engine_->NextCallId())
+    , timer_(parent->io_service())
+{
+  RpcRequestHeaderProto rpc_header;
+  RequestHeaderProto req_header;
+  SetRequestHeader(parent->engine_, call_id_, method_name, &rpc_header, &req_header);
+  ConstructPacket(&payload_, {&rpc_header, &req_header}, &request);
+}
+
+RpcConnection::RequestBase::RequestBase(
+    RpcConnection *parent,
+    const std::string &method_name,
+    const pb::MessageLite *request)
+    : call_id_(parent->engine_->NextCallId())
+    , timer_(parent->io_service())
+{
+  RpcRequestHeaderProto rpc_header;
+  RequestHeaderProto req_header;
+  SetRequestHeader(parent->engine_, call_id_, method_name, &rpc_header, &req_header);
+  ConstructPacket(&payload_, {&rpc_header, &req_header, request}, nullptr);
+}
 
 RpcConnection::RequestBase::~RequestBase() {}
 
@@ -85,47 +122,6 @@ RpcConnection::RpcConnection(RpcEngine *engine)
   return engine_->io_service();
 }
 
-std::shared_ptr<std::string> RpcConnection::SerializeRpcRequest(
-    const std::shared_ptr<RequestBase> &req) {
-  RpcRequestHeaderProto h;
-  h.set_rpckind(RPC_PROTOCOL_BUFFER);
-  h.set_rpcop(RpcRequestHeaderProto::RPC_FINAL_PACKET);
-  h.set_callid(req->call_id_);
-  h.set_clientid(engine_->client_name());
-
-  RequestHeaderProto req_header;
-  req_header.set_methodname(req->method_name_);
-  req_header.set_declaringclassprotocolname(engine_->protocol_name());
-  req_header.set_clientprotocolversion(engine_->protocol_version());
-
-  auto res = std::make_shared<std::string>();
-  pbio::StringOutputStream ss(res.get());
-  pbio::CodedOutputStream os(&ss);
-  ConstructRpcRequest(&os, {&h, &req_header, req->req_.get()});
-  return res;
-}
-
-void RpcConnection::OnHandleRpcTimeout(const ::asio::error_code &ec,
-		std::shared_ptr<RequestBase> req) {
-
-	req->timeout_timer_.cancel();
-
-	auto it = requests_on_fly_.find(req->call_id_);
-	if (it != requests_on_fly_.end()) { // wait too long to get response
-		//clean request waiting for response
-		requests_on_fly_.erase(req->call_id_);
-		std::cerr << "rpc request timed out" << std::endl;
-
-		Status stat;
-		if (!next_layer().is_open()) { // bad connection
-			stat = Status::BadConnection(ec.message().c_str());
-		} else {
-			stat = Status::RpcTimeout(ec.message().c_str());
-		}
-		req->InvokeCallback(stat);
-	}
-}
-
 void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
   request_over_the_wire_.reset();
   if (ec) {
@@ -140,23 +136,25 @@ void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
 
   std::shared_ptr<RequestBase> req = pending_requests_.front();
   pending_requests_.erase(pending_requests_.begin());
-  requests_on_fly_[req->call_id_] = req;
+  requests_on_fly_[req->call_id()] = req;
   request_over_the_wire_ = req;
 
-  // set the timeout for the RPC request
-  req->timeout_timer_.expires_from_now(seconds_type(30));
-  req->timeout_timer_.async_wait(
-    		  std::bind(&RpcConnection::OnHandleRpcTimeout, this, ::asio::error_code(), req));
+  // TODO: set the timeout for the RPC request
 
-  std::shared_ptr<std::string> buf = SerializeRpcRequest(req);
-  asio::async_write(next_layer(), asio::buffer(*buf),
+  asio::async_write(next_layer(), asio::buffer(req->payload()),
                     std::bind(&RpcConnection::OnHandleWrite, this, _1, _2));
 }
 
 void RpcConnection::OnHandleRead(const ::asio::error_code &ec, size_t) {
-  if (ec) {
-    // TODO: Error in response
-    assert (false && "Unimplemented");
+  switch (ec.value()) {
+    case 0:
+      // No errors
+      break;
+    case asio::error::operation_aborted:
+      // The event loop has been shut down. Ignore the error.
+      return;
+    default:
+      assert (false && "Unimplemented");
   }
 
   auto s = &response_state_;
@@ -196,6 +194,7 @@ void RpcConnection::StartWriteLoop() {
 void RpcConnection::HandleRpcResponse(const std::vector<char> &data) {
   pbio::ArrayInputStream ar(&data[0], data.size());
   pbio::CodedInputStream in(&ar);
+  in.PushLimit(data.size());
   RpcResponseHeaderProto h;
   ReadDelimitedPBMessage(&in, &h);
 
@@ -207,22 +206,18 @@ void RpcConnection::HandleRpcResponse(const std::vector<char> &data) {
 
   auto req = it->second;
   requests_on_fly_.erase(it);
+  Status stat;
   if (h.has_exceptionclassname()) {
-    Status stat = Status::Exception(h.exceptionclassname().c_str(),
-                                    h.errormsg().c_str());
-    req->InvokeCallback(stat);
-  } else {
-    ReadDelimitedPBMessage(&in, req->resp_.get());
-    req->InvokeCallback(Status::OK());
+    stat = Status::Exception(h.exceptionclassname().c_str(),
+                             h.errormsg().c_str());
   }
+  req->OnResponseArrived(&in, stat);
 }
 
-void RpcConnection::PrepareHandshakePacket(std::string *result) {
+std::shared_ptr<std::string> RpcConnection::PrepareHandshakePacket() {
   static const char kHandshakeHeader[] = {'h', 'r', 'p', 'c',
                                           RpcEngine::kRpcVersion, 0, 0};
-  pbio::StringOutputStream ss(result);
-  pbio::CodedOutputStream os(&ss);
-  os.WriteRaw(kHandshakeHeader, sizeof(kHandshakeHeader));
+  auto res = std::make_shared<std::string>(kHandshakeHeader, sizeof(kHandshakeHeader));
 
   RpcRequestHeaderProto h;
   h.set_rpckind(RPC_PROTOCOL_BUFFER);
@@ -232,7 +227,8 @@ void RpcConnection::PrepareHandshakePacket(std::string *result) {
 
   IpcConnectionContextProto handshake;
   handshake.set_protocol(engine_->protocol_name());
-  ConstructRpcRequest(&os, {&h, &handshake});
+  ConstructPacket(res.get(), {&h, &handshake}, nullptr);
+  return res;
 }
 
 void RpcConnection::Shutdown() {

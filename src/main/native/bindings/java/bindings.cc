@@ -1,6 +1,7 @@
 #include "me_haohui_libhdfspp_NativeIoService.h"
 #include "me_haohui_libhdfspp_NativeTcpConnection.h"
 #include "me_haohui_libhdfspp_NativeRemoteBlockReader.h"
+#include "me_haohui_libhdfspp_NativeRpcEngine.h"
 
 #include "libhdfs++/hdfs.h"
 
@@ -8,6 +9,7 @@
 
 #include "common/libhdfs++-internal.h"
 #include "common/util.h"
+#include "rpc/rpc_engine.h"
 
 #include <google/protobuf/message_lite.h>
 #include <asio/ip/tcp.hpp>
@@ -40,6 +42,13 @@ static void ReadPBMessage(JNIEnv *env, jbyteArray jbytes, pb::MessageLite *msg) 
   void *b = env->GetPrimitiveArrayCritical(jbytes, nullptr);
   msg->ParseFromArray(b, env->GetArrayLength(jbytes));
   env->ReleasePrimitiveArrayCritical(jbytes, b, JNI_ABORT);
+}
+
+static std::string ReadByteString(JNIEnv *env, jbyteArray jbytes) {
+  char *data = reinterpret_cast<char*>(env->GetPrimitiveArrayCritical(jbytes, nullptr));
+  std::string res(data, env->GetArrayLength(jbytes));
+  env->ReleasePrimitiveArrayCritical(jbytes, data, JNI_ABORT);
+  return res;
 }
 
 JNIEXPORT jlong JNICALL Java_me_haohui_libhdfspp_NativeIoService_create(JNIEnv *, jclass) {
@@ -102,11 +111,11 @@ JNIEXPORT void JNICALL Java_me_haohui_libhdfspp_NativeRemoteBlockReader_destroy(
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_me_haohui_libhdfspp_NativeRemoteBlockReader_connect(JNIEnv *env, jclass, jlong handle, jbyteArray jclient_name, jbyteArray jtoken, jbyteArray jblock, jlong length, jlong offset) {
+Java_me_haohui_libhdfspp_NativeRemoteBlockReader_connect(JNIEnv *env, jclass, jlong handle,
+                                                         jbyteArray jclient_name, jbyteArray jtoken,
+                                                         jbyteArray jblock, jlong length, jlong offset) {
   auto self = reinterpret_cast<RemoteBlockReader<tcp::socket>*>(handle);
-  char *client_byte = reinterpret_cast<char*>(env->GetPrimitiveArrayCritical(jclient_name, nullptr));
-  std::string client_name(client_byte, env->GetArrayLength(jclient_name));
-  env->ReleasePrimitiveArrayCritical(jclient_name, client_byte, JNI_ABORT);
+  std::string client_name(ReadByteString(env, jclient_name));
   hadoop::common::TokenProto token;
   if (jtoken) {
     ReadPBMessage(env, jtoken, &token);
@@ -119,7 +128,7 @@ Java_me_haohui_libhdfspp_NativeRemoteBlockReader_connect(JNIEnv *env, jclass, jl
 
 JNIEXPORT jint JNICALL
 Java_me_haohui_libhdfspp_NativeRemoteBlockReader_readSome(JNIEnv *env, jclass, jlong handle, jobject jdst,
-                                                      jint position, jint limit, jobjectArray jstatus) {
+                                                          jint position, jint limit, jobjectArray jstatus) {
   auto self = reinterpret_cast<RemoteBlockReader<tcp::socket>*>(handle);
   char *start = reinterpret_cast<char*>(env->GetDirectBufferAddress(jdst));
   Status stat;
@@ -133,4 +142,54 @@ Java_me_haohui_libhdfspp_NativeRemoteBlockReader_readSome(JNIEnv *env, jclass, j
     SetStatusArray(env, jstatus, stat);
   }
   return transferred;
+}
+
+JNIEXPORT jlong JNICALL
+Java_me_haohui_libhdfspp_NativeRpcEngine_create(JNIEnv *env, jclass, jlong io_service_handle,
+                                                jbyteArray jclient_name, jbyteArray jprotocol,
+                                                jint version) {
+  IoServiceImpl *io_service = reinterpret_cast<IoServiceImpl*>(io_service_handle);
+
+  RpcEngine *engine = new RpcEngine(&io_service->io_service(), ReadByteString(env, jclient_name),
+                                    ReadByteString(env, jprotocol).c_str(), version);
+  return reinterpret_cast<uintptr_t>(engine);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_me_haohui_libhdfspp_NativeRpcEngine_connect(JNIEnv *env, jclass, jlong handle,
+                                                 jstring jhost, jint port) {
+  RpcEngine *self = reinterpret_cast<RpcEngine*>(handle);
+  const char *host = env->GetStringUTFChars(jhost, nullptr);
+  tcp::endpoint ep(asio::ip::address::from_string(host), port);
+  Status status = self->Connect(ep);
+  env->ReleaseStringUTFChars(jhost, host);
+  return ToJavaStatusRep(env, status);
+}
+
+JNIEXPORT void JNICALL
+Java_me_haohui_libhdfspp_NativeRpcEngine_startReadLoop(JNIEnv *, jclass, jlong handle) {
+  RpcEngine *self = reinterpret_cast<RpcEngine*>(handle);
+  self->StartReadLoop();
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_me_haohui_libhdfspp_NativeRpcEngine_rpc(JNIEnv *env, jclass, jlong handle, jbyteArray jmethod,
+                                             jbyteArray request, jobjectArray jstatus) {
+  RpcEngine *self = reinterpret_cast<RpcEngine*>(handle);
+  auto response = std::make_shared<std::string>();
+  Status stat = self->RawRpc(ReadByteString(env, jmethod),
+                             std::move(ReadByteString(env, request)), response);
+  if (!stat.ok()) {
+    SetStatusArray(env, jstatus, stat);
+    return nullptr;
+  }
+  jbyteArray jresp = env->NewByteArray(response->size());
+  void *b = env->GetPrimitiveArrayCritical(jresp, nullptr);
+  memcpy(b, response->c_str(), response->size());
+  env->ReleasePrimitiveArrayCritical(jresp, b, 0);
+  return jresp;
+}
+
+JNIEXPORT void JNICALL Java_me_haohui_libhdfspp_NativeRpcEngine_destroy(JNIEnv *, jclass, jlong handle) {
+  delete reinterpret_cast<RpcEngine*>(handle);
 }

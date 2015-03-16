@@ -17,10 +17,9 @@
  */
 package me.haohui.libhdfspp;
 
-import java.io.Closeable;
 import java.io.IOException;
 
-public class IoServiceExecutor {
+public class IoServiceExecutor implements AutoCloseable {
   private final NativeIoService ioService;
   private final Thread worker;
 
@@ -32,15 +31,16 @@ public class IoServiceExecutor {
         ioService.run();
       }
     });
+
+  }
+
+  public void start() {
     worker.start();
   }
 
-  public void join() throws InterruptedException {
+  @Override
+  public void close() throws IOException, InterruptedException {
+    ioService.stop();
     worker.join();
   }
-
-  public void stop() {
-    ioService.stop();
-  }
-
 }

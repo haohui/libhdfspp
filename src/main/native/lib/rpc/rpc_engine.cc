@@ -17,10 +17,12 @@
  */
 #include "rpc_engine.h"
 
+#include <future>
+
 namespace hdfs {
 
 RpcEngine::RpcEngine(::asio::io_service *io_service,
-                     const char *client_name,
+                     const std::string &client_name,
                      const char *protocol_name, int protocol_version)
     : io_service_(io_service)
     , client_name_(client_name)
@@ -30,8 +32,43 @@ RpcEngine::RpcEngine(::asio::io_service *io_service,
     , conn_(this)
 {}
 
+Status RpcEngine::Connect(const ::asio::ip::tcp::endpoint &server) {
+  std::promise<Status> stat;
+  conn_.Connect(server, [this,&stat](const Status &status) {
+      if (!status.ok()) {
+        stat.set_value(status);
+        return;
+      }
+      conn_.Handshake([this,&stat](const Status &status) { stat.set_value(status); });
+    });
+  return stat.get_future().get();
+}
+
+void RpcEngine::StartReadLoop() {
+  conn_.StartReadLoop();
+}
+
 void RpcEngine::Shutdown() {
   io_service_->post([this]() { conn_.Shutdown(); });
+}
+
+Status RpcEngine::Rpc(const std::string &method_name,
+                      const ::google::protobuf::MessageLite *req,
+                      const std::shared_ptr<::google::protobuf::MessageLite> &resp) {
+  std::promise<Status> stat;
+  AsyncRpc(method_name, req, resp, [&stat](const Status &status) {
+      stat.set_value(status);
+    });
+  return stat.get_future().get();
+}
+
+Status RpcEngine::RawRpc(const std::string &method_name, const std::string &req,
+                         std::shared_ptr<std::string> resp) {
+  std::promise<Status> stat;
+  conn_.AsyncRawRpc(method_name, req, resp, [&stat](const Status &status) {
+      stat.set_value(status);
+    });
+  return stat.get_future().get();
 }
 
 }

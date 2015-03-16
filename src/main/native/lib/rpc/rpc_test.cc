@@ -19,9 +19,9 @@ int main(int argc, char *argv[]) {
   }
 
   RpcEngine engine(&io_service, "libhdfs++", "org.apache.hadoop.hdfs.protocol.ClientProtocol", 1);
-  auto req = std::make_shared<GetFileInfoRequestProto>();
+  GetFileInfoRequestProto req;
   auto resp = std::make_shared<GetFileInfoResponseProto>();
-  req->set_src(argv[3]);
+  req.set_src(argv[3]);
 
   RpcConnection *conn = &engine.connection();
 
@@ -29,18 +29,18 @@ int main(int argc, char *argv[]) {
   tcp::resolver::query query(tcp::v4(), argv[1], argv[2]);
   tcp::resolver::iterator iterator = resolver.resolve(query);
 
-  conn->Connect(*iterator, [conn,req,resp,&io_service](const Status &status) {
+  conn->Connect(*iterator, [conn,&req,resp,&io_service](const Status &status) {
       if (!status.ok()) {
         std::cerr << "Connection failed: "<< status.ToString() << std::endl;
         return;
       }
-      conn->Handshake([conn,req,resp,&io_service](const Status &status) {
+      conn->Handshake([conn,&req,resp,&io_service](const Status &status) {
           if (!status.ok()) {
             std::cerr << "Handshake failed: "<< status.ToString() << std::endl;
             return;
           }
           conn->StartReadLoop();
-          conn->AsyncRpc("getFileInfo", req, resp, [resp,&io_service](const Status &status) {
+          conn->AsyncRpc("getFileInfo", &req, resp, [resp,&io_service](const Status &status) {
               if (!status.ok()) {
                 std::cerr << "Async RPC Failed: "<< status.ToString() << std::endl;
                 io_service.post([&io_service](){ io_service.stop(); });

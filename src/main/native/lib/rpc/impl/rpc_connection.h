@@ -20,6 +20,7 @@
 
 #include "RpcHeader.pb.h"
 
+#include "common/protobuf_util.h"
 #include "common/util.h"
 
 #include <google/protobuf/io/coded_stream.h>
@@ -32,31 +33,47 @@ namespace hdfs {
 
 class RpcConnection::RequestBase {
  public:
-  const std::string method_name_;
-  const std::shared_ptr<::google::protobuf::MessageLite> req_;
-  const std::shared_ptr<::google::protobuf::MessageLite> resp_;
-  const int call_id_;
-  ::asio::deadline_timer timeout_timer_;
-  RequestBase(RpcConnection *parent,
-              const char *method_name,
-              const std::shared_ptr<::google::protobuf::MessageLite> &req,
-              const std::shared_ptr<::google::protobuf::MessageLite> &resp);
-  virtual void InvokeCallback(const Status &status) = 0;
+  int call_id() const { return call_id_; }
+  ::asio::deadline_timer &timer() { return timer_; }
+  const std::string &payload() const { return payload_; }
+
   virtual ~RequestBase();
+  virtual void OnResponseArrived(
+      ::google::protobuf::io::CodedInputStream *is,
+      const Status &status) = 0;
+
+ protected:
+  int call_id_;
+  ::asio::deadline_timer timer_;
+  std::string payload_;
+
+  RequestBase(RpcConnection *parent, const std::string &method_name,
+              const std::string &request);
+  RequestBase(RpcConnection *parent, const std::string &method_name,
+              const ::google::protobuf::MessageLite *request);
 };
 
 template <class Handler>
 class RpcConnection::Request : public RequestBase {
  public:
-  Request(RpcConnection *parent,
-          const char *method_name,
-          const std::shared_ptr<::google::protobuf::MessageLite> &req,
-          const std::shared_ptr<::google::protobuf::MessageLite> &resp,
-          const Handler &handler)
-      : RequestBase(parent, method_name, req, resp)
-      , handler_(handler)
+  Request(RpcConnection *parent, const std::string &method_name,
+          const std::string &request,
+          Handler &&handler)
+      : RequestBase(parent, method_name, request)
+      , handler_(std::move(handler))
   {}
-  void InvokeCallback(const Status &status) { handler_(status); }
+
+  Request(RpcConnection *parent, const std::string &method_name,
+          const ::google::protobuf::MessageLite *request,
+          Handler &&handler)
+      : RequestBase(parent, method_name, request)
+      , handler_(std::move(handler))
+  {}
+
+  virtual void OnResponseArrived(::google::protobuf::io::CodedInputStream *is,
+                                 const Status &status) override
+  { handler_(is, status); }
+
   Handler handler_;
 };
 
@@ -69,20 +86,48 @@ void RpcConnection::Connect(const ::asio::ip::tcp::endpoint &server, const Handl
 
 template <class Handler>
 void RpcConnection::Handshake(const Handler &handler) {
-  auto handshake_packet = std::make_shared<std::string>();
-  PrepareHandshakePacket(handshake_packet.get());
+  auto handshake_packet = PrepareHandshakePacket();
 
   ::asio::async_write(next_layer(), asio::buffer(*handshake_packet),
                       [handshake_packet, handler](const ::asio::error_code &ec, size_t)
                       { handler(ToStatus(ec)); });
 }
 
+
 template <class Handler>
-void RpcConnection::AsyncRpc(const char *method_name,
-                             const std::shared_ptr<::google::protobuf::MessageLite> &req,
-                             const std::shared_ptr<::google::protobuf::MessageLite> &resp,
+void RpcConnection::AsyncRpc(const std::string &method_name,
+                             const ::google::protobuf::MessageLite *req,
+                             std::shared_ptr<::google::protobuf::MessageLite> resp,
                              const Handler &handler) {
-  auto r = new Request<Handler>(this, method_name, req, resp, handler);
+  auto wrapped_handler = [resp,handler](::google::protobuf::io::CodedInputStream *is, const Status &status) {
+    if (status.ok()) {
+      ReadDelimitedPBMessage(is, resp.get());
+    }
+    handler(status);
+  };
+
+  auto r = new Request<decltype(wrapped_handler)>(this, method_name, req, std::move(wrapped_handler));
+  pending_requests_.push_back(std::shared_ptr<RequestBase>(r));
+  StartWriteLoop();
+}
+
+template <class Handler>
+void RpcConnection::AsyncRawRpc(const std::string &method_name,
+                                const std::string &req,
+                                std::shared_ptr<std::string> resp,
+                                const Handler &handler) {
+  auto wrapped_handler = [this,resp,handler](::google::protobuf::io::CodedInputStream *is, const Status &status) {
+    if (status.ok()) {
+      uint32_t size = 0;
+      is->ReadVarint32(&size);
+      auto limit = is->PushLimit(size);
+      is->ReadString(resp.get(), limit);
+      is->PopLimit(limit);
+    }
+    handler(status);
+  };
+
+  auto r = new Request<decltype(wrapped_handler)>(this, method_name, req, std::move(wrapped_handler));
   pending_requests_.push_back(std::shared_ptr<RequestBase>(r));
   StartWriteLoop();
 }

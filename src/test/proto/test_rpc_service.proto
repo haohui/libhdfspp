@@ -15,42 +15,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.haohui.libhdfspp;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.lang.Exception;
-import java.lang.Override;
+option java_package = "me.haohui.libhdfspp";
+option java_outer_classname = "TestRpcServiceProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+package hdfs;
 
-class NativeIoService implements Closeable {
-  static {
-    System.loadLibrary("hdfsppjni");
-  }
+message EmptyRequestProto {
+}
 
-  private final long handle;
-  long handle() {
-    return handle;
-  }
+message EmptyResponseProto {
+}
 
-  NativeIoService() {
-    handle = create();
-  }
+message EchoRequestProto {
+  required string message = 1;
+}
 
-  void run() {
-    nativeRun(handle);
-  }
-  void stop() {
-    stop(handle);
-  }
+message EchoResponseProto {
+  required string message = 1;
+}
 
-  @Override
-  public void close() throws IOException {
-    stop(handle);
-    destroy(handle);
-  }
-
-  private native static long create();
-  private native static void nativeRun(long handle);
-  private native static void stop(long handle);
-  private native static void destroy(long handle);
+/**
+ * A protobuf service for use in tests
+ */
+service TestProtobufRpcProto {
+  rpc ping(EmptyRequestProto) returns (EmptyResponseProto);
+  rpc echo(EchoRequestProto) returns (EchoResponseProto);
+  rpc error(EmptyRequestProto) returns (EmptyResponseProto);
+  rpc error2(EmptyRequestProto) returns (EmptyResponseProto);
 }
