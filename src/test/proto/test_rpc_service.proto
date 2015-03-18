@@ -41,6 +41,8 @@ message EchoResponseProto {
  */
 service TestProtobufRpcProto {
   rpc ping(EmptyRequestProto) returns (EmptyResponseProto);
+  rpc slowPing(EmptyRequestProto) returns(EmptyResponseProto);
+  rpc fastPing(EmptyRequestProto) returns(EmptyResponseProto);
   rpc echo(EchoRequestProto) returns (EchoResponseProto);
   rpc error(EmptyRequestProto) returns (EmptyResponseProto);
   rpc error2(EmptyRequestProto) returns (EmptyResponseProto);
