@@ -29,6 +29,8 @@
 #include <asio/connect.hpp>
 #include <asio/write.hpp>
 
+#include <iostream>
+
 namespace hdfs {
 
 class RpcConnection::RequestBase {
