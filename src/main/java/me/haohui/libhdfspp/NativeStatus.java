@@ -20,8 +20,16 @@ package me.haohui.libhdfspp;
 import org.apache.commons.io.Charsets;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 class NativeStatus {
+  public static final int K_OK = 0;
+  public static final int K_INVALID_ARGUMENT = 22;
+  public static final int K_GENERIC_ERROR = 1;
+  public static final int K_INVALID_ENCRYPTION_KEY = 2;
+  public static final int K_UNIMPLEMENTED = 3;
+  public static final int K_EXCEPTION = 256;
+
   private final byte[] state;
 
   NativeStatus(byte[] state) {
@@ -30,6 +38,14 @@ class NativeStatus {
 
   boolean ok() {
     return state == null;
+  }
+
+  public int code() {
+    if (ok()) {
+      return 0;
+    } else {
+      return ByteBuffer.wrap(state, 0, 8).getInt();
+    }
   }
 
   public void checkForIOException() throws IOException {

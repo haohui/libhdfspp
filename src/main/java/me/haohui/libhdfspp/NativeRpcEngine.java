@@ -47,15 +47,16 @@ class NativeRpcEngine implements Closeable {
     startReadLoop(handle);
   }
 
-  void rpc(byte[] method, MessageLite request, MessageLite.Builder response)
-      throws IOException {
+  NativeStatus rpc(byte[] method, MessageLite request,
+      MessageLite.Builder response) throws IOException {
+    NativeStatus status = new NativeStatus(null);
     byte[][] stat = new byte[1][];
     byte[] resp = rpc(handle, method, request.toByteArray(), stat);
     if (stat[0] != null) {
-      NativeStatus status = new NativeStatus(stat[0]);
-      status.checkForIOException();
+      status = new NativeStatus(stat[0]);
     }
     response.clear().mergeFrom(resp);
+    return status;
   }
 
   @Override

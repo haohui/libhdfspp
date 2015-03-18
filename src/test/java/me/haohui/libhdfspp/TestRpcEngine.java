@@ -68,10 +68,10 @@ public class TestRpcEngine {
       this.engine = engine;
     }
 
-    private void rpc(String method, MessageLite request,
+    private NativeStatus rpc(String method, MessageLite request,
         MessageLite.Builder response) throws ServiceException {
       try {
-        engine.rpc(method.getBytes(Charsets.UTF_8), request, response);
+        return engine.rpc(method.getBytes(Charsets.UTF_8), request, response);
       } catch (IOException e) {
         throw new ServiceException(e);
       }
@@ -82,8 +82,8 @@ public class TestRpcEngine {
         RpcController controller, EmptyRequestProto request)
         throws ServiceException {
       EmptyResponseProto.Builder b = EmptyResponseProto.newBuilder();
-      rpc("ping", request, b);
-      return b.build();
+      NativeStatus stat = rpc("ping", request, b);
+      return b.setStat(stat.code()).build();
     }
 
     @Override
@@ -91,8 +91,8 @@ public class TestRpcEngine {
         RpcController controller, EchoRequestProto request)
         throws ServiceException {
       EchoResponseProto.Builder b = EchoResponseProto.newBuilder();
-      rpc("echo", request, b);
-      return b.build();
+      NativeStatus stat = rpc("echo", request, b);
+      return b.setStat(stat.code()).build();
     }
 
     @Override
@@ -100,8 +100,8 @@ public class TestRpcEngine {
         RpcController controller, EmptyRequestProto request)
         throws ServiceException {
       EmptyResponseProto.Builder b = EmptyResponseProto.newBuilder();
-      rpc("error", request, b);
-      return b.build();
+      NativeStatus stat = rpc("error", request, b);
+      return b.setStat(stat.code()).build();
     }
 
     @Override
@@ -109,8 +109,8 @@ public class TestRpcEngine {
         RpcController controller, EmptyRequestProto request)
         throws ServiceException {
       EmptyResponseProto.Builder b = EmptyResponseProto.newBuilder();
-      rpc("error2", request, b);
-      return b.build();
+      NativeStatus stat = rpc("error2", request, b);
+      return b.setStat(stat.code()).build();
     }
 
     @Override
@@ -194,19 +194,21 @@ public class TestRpcEngine {
   public static void testProtoBufRpc(TestRpcService client) throws Exception {
     // Test ping method
     EmptyRequestProto emptyRequest = EmptyRequestProto.newBuilder().build();
-    client.ping(null, emptyRequest);
+    EmptyResponseProto pingResponse = client.ping(null, emptyRequest);
+    Assert.assertEquals(pingResponse.getStat(), NativeStatus.K_OK);
 
     // Test echo method
     EchoRequestProto echoRequest = EchoRequestProto.newBuilder()
         .setMessage("hello").build();
     EchoResponseProto echoResponse = client.echo(null, echoRequest);
     Assert.assertEquals(echoResponse.getMessage(), "hello");
+    Assert.assertEquals(echoResponse.getStat(), NativeStatus.K_OK);
 
     // Test error method - error should be thrown as RemoteException
     try {
       client.error(null, emptyRequest);
       Assert.fail("Expected exception is not thrown");
-    } catch (ServiceException ignored) {
+    } catch (Exception ignored) {
     }
   }
 
@@ -223,7 +225,7 @@ public class TestRpcEngine {
       try {
         client.error2(null, emptyRequest);
         Assert.fail("Expected exception is not thrown");
-      } catch (ServiceException ignored) {
+      } catch (Exception ignored) {
       }
     }
   }

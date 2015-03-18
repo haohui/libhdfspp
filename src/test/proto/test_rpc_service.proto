@@ -26,6 +26,7 @@ message EmptyRequestProto {
 }
 
 message EmptyResponseProto {
+  optional int32 stat = 1;
 }
 
 message EchoRequestProto {
@@ -34,6 +35,7 @@ message EchoRequestProto {
 
 message EchoResponseProto {
   required string message = 1;
+  optional int32 stat = 2;
 }
 
 /**
