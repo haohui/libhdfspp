@@ -18,10 +18,27 @@
 package me.haohui.libhdfspp;
 
 import org.apache.commons.io.Charsets;
-
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 
 class NativeStatus {
+  enum StateCode {
+    K_OK(0),
+    K_INVALID_ARGUMENT(22), // EINVAL
+    K_GENERIC_ERROR(1),
+    K_INVALID_ENCRYPTION_KEY(2),
+    K_UNIMPLEMENTED(3),
+    K_RPC_CONNECTION_RESET(54), // ECONNRESET
+    K_RPC_TIMEOUT(60), // ETIMEDOUT
+    K_EXCEPTION(256);
+
+    private final int value;
+    StateCode(int value) {
+      this.value = value;
+    }
+  }
   private final byte[] state;
 
   NativeStatus(byte[] state) {
@@ -32,10 +49,31 @@ class NativeStatus {
     return state == null;
   }
 
+  private int code() {
+    if (ok()) {
+      return 0;
+    } else {
+      return ByteBuffer.wrap(state, 0, 8).getInt();
+    }
+  }
+
+  private String message() {
+    if (ok()) {
+      return "OK";
+    } else {
+      return new String(state, 8, state.length - 8, Charsets.UTF_8);
+    }
+  }
+
   public void checkForIOException() throws IOException {
     if (!ok()) {
-      throw new IOException(new String(state, 8, state.length - 8, Charsets
-          .UTF_8));
+      if (code() == StateCode.K_RPC_TIMEOUT.value) {
+        throw new SocketTimeoutException(message());
+      } else if (code() == StateCode.K_RPC_CONNECTION_RESET.value) {
+        throw new ConnectException(message());
+      } else {
+        throw new IOException(message());
+      }
     }
   }
 }
