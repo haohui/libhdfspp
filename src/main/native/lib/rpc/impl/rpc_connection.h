@@ -77,11 +77,12 @@ class RpcConnection::Request : public RequestBase {
   Handler handler_;
 };
 
-template <class Handler>
-void RpcConnection::Connect(const ::asio::ip::tcp::endpoint &server, const Handler &handler) {
-  next_layer_.async_connect(server, [handler](const ::asio::error_code &ec) {
-      handler(ToStatus(ec));
-    });
+template <class Iterator, class Handler>
+void RpcConnection::Connect(Iterator begin, Iterator end, const Handler &handler) {
+  ::asio::async_connect(next_layer_, begin, end,
+                        [handler](const ::asio::error_code &ec, Iterator) {
+                          handler(ToStatus(ec));
+                        });
 }
 
 template <class Handler>

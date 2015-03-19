@@ -38,8 +38,8 @@ class RpcConnection {
  public:
   typedef ::asio::ip::tcp::socket NextLayer;
   RpcConnection(RpcEngine *engine);
-  template <class Handler>
-  void Connect(const ::asio::ip::tcp::endpoint &server, const Handler &handler);
+  template <class Iterator, class Handler>
+  void Connect(Iterator begin, Iterator end, const Handler &handler);
   template <class Handler>
   void Handshake(const Handler &handler);
   void Shutdown();
@@ -146,6 +146,7 @@ class RpcEngine {
   RpcConnection &connection() { return conn_; }
   ::asio::io_service &io_service() { return *io_service_; }
 
+  static std::string GetRandomClientName();
  private:
   ::asio::io_service *io_service_;
   const std::string client_name_;
