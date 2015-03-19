@@ -15,35 +15,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIBHDFSPP_HDFS_H_
-#define LIBHDFSPP_HDFS_H_
 
-#include "libhdfs++/status.h"
+#include "filesystem.h"
 
 namespace hdfs {
 
-class IoService {
- public:
-  static IoService *New();
-  virtual void Run() = 0;
-  virtual void Stop() = 0;
-  virtual ~IoService();
-};
+using ::hadoop::hdfs::LocatedBlocksProto;
 
-class InputStream {
- public:
-  virtual Status PositionRead(void *buf, size_t nbyte, size_t offset, size_t *read_bytes) = 0;
-  virtual ~InputStream();
-};
+InputStream::~InputStream()
+{}
 
-class FileSystem {
- public:
-  static Status New(IoService *io_service, const char *server,
-                    unsigned short port, FileSystem **fsptr);
-  virtual Status Open(const char *path, InputStream **isptr) = 0;
-  virtual ~FileSystem();
-};
+InputStreamImpl::InputStreamImpl(FileSystemImpl *fs, const LocatedBlocksProto *blocks)
+    : fs_(fs)
+    , file_length_(blocks->filelength())
+{
+  for (const auto &block : blocks->blocks()) {
+    blocks_.push_back(block);
+  }
 
+  if (blocks->has_lastblock() && blocks->lastblock().b().numbytes()) {
+    blocks_.push_back(blocks->lastblock());
+  }
 }
 
-#endif
+Status InputStreamImpl::PositionRead(void *buf, size_t nbyte, size_t offset, size_t *read_bytes) {
+  std::promise<Status> stat;
+  auto handler = [&stat,read_bytes](const Status &status, size_t transferred) {
+    *read_bytes = transferred;
+    stat.set_value(status);
+  };
+  
+  AsyncPreadSome(offset, asio::buffer(buf, nbyte), handler);
+  return stat.get_future().get();
+}
+
+}
