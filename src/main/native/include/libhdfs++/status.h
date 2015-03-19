@@ -39,6 +39,8 @@ class Status {
   static Status OK() { return Status(); }
   static Status InvalidArgument(const char *msg)
   { return Status(kInvalidArgument, msg); }
+  static Status ResourceUnavailable(const char *msg)
+  { return Status(kResourceUnavailable, msg); }
   static Status Unimplemented()
   { return Status(kUnimplemented, ""); }
   static Status Error(const char *msg)
@@ -71,6 +73,7 @@ class Status {
   enum Code {
     kOk = 0,
     kInvalidArgument = static_cast<unsigned>(std::errc::invalid_argument),
+    kResourceUnavailable = static_cast<unsigned>(std::errc::resource_unavailable_try_again),
     kGenericError = 1,
     kInvalidEncryptionKey = 2,
     kUnimplemented = 3,
