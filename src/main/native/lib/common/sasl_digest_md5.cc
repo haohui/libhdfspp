@@ -17,8 +17,8 @@
  */
 #include "sasl_authenticator.h"
 
-#include <openssl/bio.h>
-#include <openssl/evp.h>
+#include "common/util.h"
+
 #include <openssl/rand.h>
 #include <openssl/md5.h>
 
@@ -202,20 +202,6 @@ Status DigestMD5Authenticator::GenerateResponseValue(std::string *response_value
              << ":" << BinaryToHex(GetMD5Digest(a2));
   *response_value = BinaryToHex(GetMD5Digest(combine_ss.str()));
   return Status::OK();
-}
-
-static std::string Base64Encode(const std::string &src) {
-  int encoded_size = (src.size() + 2) / 3 * 4;
-  std::string dst;
-  dst.resize(encoded_size);
-  BIO *bio = BIO_new_mem_buf(const_cast<char*>(dst.c_str()), dst.size());
-  BIO *b64 = BIO_new(BIO_f_base64());
-  bio = BIO_push(b64, bio);
-  BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-  BIO_write(bio, &src.at(0), src.size());
-  BIO_flush(bio);
-  BIO_free_all(bio);
-  return dst;
 }
 
 static std::string QuoteString(const std::string &src) {
