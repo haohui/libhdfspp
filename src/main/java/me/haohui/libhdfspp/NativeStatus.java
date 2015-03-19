@@ -18,10 +18,23 @@
 package me.haohui.libhdfspp;
 
 import org.apache.commons.io.Charsets;
+import org.apache.hadoop.net.ConnectTimeoutException;
+
+import sun.net.ConnectionResetException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 class NativeStatus {
+  public static final int K_OK = 0;
+  public static final int K_INVALID_ARGUMENT = 22; // EINVAL
+  public static final int K_GENERIC_ERROR = 1;
+  public static final int K_INVALID_ENCRYPTION_KEY = 2;
+  public static final int K_UNIMPLEMENTED = 3;
+  public static final int  K_RPC_CONNECTION_RESET = 54; // ECONNRESET
+  public static final int K_RPC_TIMEOUT = 60; // ETIMEDOUT
+  public static final int K_EXCEPTION = 256;
+
   private final byte[] state;
 
   NativeStatus(byte[] state) {
@@ -32,10 +45,39 @@ class NativeStatus {
     return state == null;
   }
 
+  public int code() {
+    if (ok()) {
+      return 0;
+    } else {
+      return ByteBuffer.wrap(state, 0, 8).getInt();
+    }
+  }
+
+  public String message() {
+    if (ok()) {
+      return "OK";
+    } else {
+      return new String(state, 8, state.length - 8, Charsets.UTF_8);
+    }
+  }
+
   public void checkForIOException() throws IOException {
     if (!ok()) {
-      throw new IOException(new String(state, 8, state.length - 8, Charsets
-          .UTF_8));
+      throw new IOException(message());
+    }
+  }
+
+  public void checkForConnectTimeoutException()
+      throws ConnectTimeoutException {
+    if (!ok()) {
+      throw new ConnectTimeoutException(message());
+    }
+  }
+
+  public void checkForConnectionResetException()
+      throws ConnectionResetException {
+    if (!ok()) {
+      throw new ConnectionResetException(message());
     }
   }
 }

@@ -53,7 +53,13 @@ class NativeRpcEngine implements Closeable {
     byte[] resp = rpc(handle, method, request.toByteArray(), stat);
     if (stat[0] != null) {
       NativeStatus status = new NativeStatus(stat[0]);
-      status.checkForIOException();
+      if (status.code() == NativeStatus.K_RPC_TIMEOUT) {
+        status.checkForConnectTimeoutException();
+      } else if (status.code() == NativeStatus.K_RPC_CONNECTION_RESET) {
+        status.checkForConnectionResetException();
+      } else {
+        status.checkForIOException();
+      }
     }
     response.clear().mergeFrom(resp);
   }
