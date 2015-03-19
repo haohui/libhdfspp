@@ -17,6 +17,11 @@
  */
 #include "rpc_engine.h"
 
+#include "common/util.h"
+
+#include <openssl/rand.h>
+
+#include <sstream>
 #include <future>
 
 namespace hdfs {
@@ -34,7 +39,10 @@ RpcEngine::RpcEngine(::asio::io_service *io_service,
 
 Status RpcEngine::Connect(const ::asio::ip::tcp::endpoint &server) {
   std::promise<Status> stat;
-  conn_.Connect(server, [this,&stat](const Status &status) {
+  using ::asio::ip::tcp;
+  std::vector<tcp::endpoint> ep;
+  ep.push_back(server);
+  conn_.Connect(ep.begin(), ep.end(), [this,&stat](const Status &status) {
       if (!status.ok()) {
         stat.set_value(status);
         return;
@@ -69,6 +77,16 @@ Status RpcEngine::RawRpc(const std::string &method_name, const std::string &req,
       stat.set_value(status);
     });
   return stat.get_future().get();
+}
+
+std::string RpcEngine::GetRandomClientName() {
+  unsigned char buf[6];
+  RAND_pseudo_bytes(buf, sizeof(buf));
+
+  std::stringstream ss;
+  ss << "libhdfs++_"
+     << Base64Encode(std::string(reinterpret_cast<char*>(buf), sizeof(buf)));
+  return ss.str();
 }
 
 }

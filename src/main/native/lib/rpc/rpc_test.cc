@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
   tcp::resolver::query query(tcp::v4(), argv[1], argv[2]);
   tcp::resolver::iterator iterator = resolver.resolve(query);
 
-  conn->Connect(*iterator, [conn,&req,resp,&io_service](const Status &status) {
+  conn->Connect(iterator, tcp::resolver::iterator(), [conn,&req,resp,&io_service](const Status &status) {
       if (!status.ok()) {
         std::cerr << "Connection failed: "<< status.ToString() << std::endl;
         return;
