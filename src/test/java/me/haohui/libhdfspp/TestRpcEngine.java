@@ -17,10 +17,13 @@
  */
 package me.haohui.libhdfspp;
 
+import static org.junit.Assert.fail;
+
 import com.google.protobuf.BlockingService;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.RpcController;
 import com.google.protobuf.ServiceException;
+
 import org.apache.commons.io.Charsets;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
@@ -39,9 +42,12 @@ import org.junit.Before;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.net.SocketTimeoutException;
 
 import me.haohui.libhdfspp.TestRpcServiceProtos.*;
+
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -87,6 +93,14 @@ public class TestRpcEngine {
     }
 
     @Override
+    public EmptyResponseProto slowPing(RpcController controller,
+        EmptyRequestProto request) throws ServiceException {
+      EmptyResponseProto.Builder b = EmptyResponseProto.newBuilder();
+      rpc("slowPing", request, b);
+      return b.build();
+    }
+
+    @Override
     public EchoResponseProto echo(
         RpcController controller, EchoRequestProto request)
         throws ServiceException {
@@ -120,11 +134,28 @@ public class TestRpcEngine {
   }
 
   public static class PBServerImpl implements TestRpcService {
+    int fastPingCounter = 0;
+
     @Override
     public EmptyResponseProto ping(RpcController unused,
         EmptyRequestProto request) throws ServiceException {
       byte[] clientId = Server.getClientId();
       Assert.assertArrayEquals(CLIENT_ID, clientId);
+      return EmptyResponseProto.newBuilder().build();
+    }
+
+    @Override
+    public synchronized EmptyResponseProto slowPing(RpcController unused,
+        EmptyRequestProto request) throws ServiceException {
+      byte[] clientId = Server.getClientId();
+      Assert.assertArrayEquals(CLIENT_ID, clientId);
+      while (fastPingCounter < 2) {
+        try {
+          wait(); // slow response until two fast pings happened
+        } catch (InterruptedException ignored) {
+        }
+      }
+      fastPingCounter = -2;
       return EmptyResponseProto.newBuilder().build();
     }
 
@@ -224,6 +255,48 @@ public class TestRpcEngine {
         client.error2(null, emptyRequest);
         Assert.fail("Expected exception is not thrown");
       } catch (ServiceException ignored) {
+      }
+    }
+  }
+
+  @Test
+  public void testRpcTimeout() throws Exception {
+    try (NativeRpcEngine engine = new NativeRpcEngine(ioService, CLIENT_ID,
+        "testProto", 1);) {
+      engine.connect(addr);
+      engine.startReadLoop();
+      TestRpcService client = new NativeRPCClient(engine);
+
+      EmptyRequestProto emptyRequest = EmptyRequestProto.newBuilder().build();
+      client.slowPing(null, emptyRequest);
+    } catch (ServiceException e) {
+      if (e.getCause() instanceof SocketTimeoutException) {
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  @Test
+  public void testShutdownServer() throws Exception {
+    try (NativeRpcEngine engine = new NativeRpcEngine(ioService, CLIENT_ID,
+        "testProto", 1);) {
+      engine.connect(addr);
+      engine.startReadLoop();
+      TestRpcService client = new NativeRPCClient(engine);
+
+      server.stop();
+
+      // Test echo method
+      EchoRequestProto echoRequest = EchoRequestProto.newBuilder()
+          .setMessage("hello").build();
+      EchoResponseProto echoResponse = client.echo(null, echoRequest);
+      Assert.assertEquals(echoResponse.getMessage(), "hello");
+    } catch (ServiceException e) {
+      if (e.getCause() instanceof ConnectException
+          || e.getCause() instanceof SocketTimeoutException) {
+      } else {
+        throw e;
       }
     }
   }
