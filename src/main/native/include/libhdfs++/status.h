@@ -30,6 +30,7 @@ class Status {
   Status() : state_(NULL) { }
   ~Status() { delete[] state_; }
   explicit Status(int code, const char *msg);
+  explicit Status(int code, const char *msg1, const char *msg2);
 
   // Copy the specified status.
   Status(const Status& s);
@@ -61,26 +62,29 @@ class Status {
     return (state_ == NULL) ? kOk : static_cast<int>(state_[4]);
   }
 
- private:
-  // OK status has a NULL state_.  Otherwise, state_ is a new[] array
-  // of the following form:
-  //    state_[0..3] == length of message
-  //    state_[4]    == code
-  //    state_[5..]  == message
-  const char* state_;
-  friend class StatusHelper;
-
   enum Code {
     kOk = 0,
     kInvalidArgument = static_cast<unsigned>(std::errc::invalid_argument),
     kResourceUnavailable = static_cast<unsigned>(std::errc::resource_unavailable_try_again),
+    kConnectionReset = static_cast<unsigned>(std::errc:: connection_reset),
+    kRpcTimeout = static_cast<unsigned>(std::errc::timed_out),
     kGenericError = 1,
     kInvalidEncryptionKey = 2,
     kUnimplemented = 3,
     kException = 256,
   };
 
-  explicit Status(int code, const char *msg1, const char *msg2);
+ private:
+  // OK status has a NULL state_.  Otherwise, state_ is a new[] array
+  // of the following form:
+  //    state_[0..3] == length of message
+  //    state_[4..7]    == code
+  //    state_[8..len1+7]  == message1
+  //    state_[len1+8..len1+9]  == ": ", if there's message2
+  //    state_[len1+10..len1+len2+9]  == message2, if there's message2
+  const char* state_;
+  friend class StatusHelper;
+
   static const char *CopyState(const char* s);
   static const char *ConstructState(int code, const char *msg1, const char *msg2);
 };

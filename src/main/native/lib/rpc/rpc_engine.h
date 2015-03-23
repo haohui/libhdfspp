@@ -104,6 +104,10 @@ class RpcConnection {
   void OnHandleWrite(const ::asio::error_code &ec, size_t transferred);
   void OnHandleRead(const ::asio::error_code &ec, size_t transferred);
   void StartWriteLoop();
+  void replyWithEmptyReponse(std::shared_ptr<RequestBase> req, int code, const char *cause, const ::asio::error_code &ec);
+  void invalidateRequest(std::shared_ptr<RequestBase> req, const ::asio::error_code &ec);
+  void invalidateAllRequests(const ::asio::error_code &ec);
+  void OnHandleRpcTimeout(const ::asio::error_code &ec, std::shared_ptr<RequestBase> req);
 };
 
 class RpcEngine {
