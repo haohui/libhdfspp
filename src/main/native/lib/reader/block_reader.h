@@ -34,6 +34,8 @@ class RemoteBlockReader {
       : stream_(stream)
       , state_(kOpen)
       , options_(options)
+      , chunk_padding_bytes_(0)
+      , checksum_chunk_size_(0)
   {}
 
   template<class MutableBufferSequence, class ReadHandler>
@@ -58,12 +60,14 @@ class RemoteBlockReader {
  private:
   struct ReadPacketHeader;
   struct ReadChecksum;
+  struct ReadPadding;
   template<class MutableBufferSequence>
   struct ReadData;
   struct AckRead;
   enum State {
     kOpen,
     kReadPacketHeader,
+    kReadPadding,
     kReadData,
     kFinished,
   };
@@ -74,8 +78,11 @@ class RemoteBlockReader {
   BlockReaderOptions options_;
   size_t packet_len_;
   size_t packet_read_bytes_;
+  int chunk_padding_bytes_;     //How many bytes to skip when receiving first packet if read offset not aligned to chunk start.
+  std::vector<char> padding_;   //Padding bytes that got sent before start of user requested data.  Keep around to be able to checksum first chunk.
   long long bytes_to_read_;
   std::vector<char> checksum_;
+  int checksum_chunk_size_;
 };
 
 }
