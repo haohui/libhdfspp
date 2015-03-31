@@ -65,4 +65,13 @@ public class TestRemoteBlockReader extends TestRemoteBlockReaderCase {
     LocatedBlock lb = getFirstLocatedBlock();
     testReadBlockCase(lb, readOffset, readLength);
   }
+
+  @Test
+  public void testReadIntoChecksumChunk() throws IOException, InterruptedException {
+    int readLength = BLOCK_SIZE/4;
+    int readOffset = 11;            //offset to middle of checksum chunk, 11 is arbitrarily chosen because it is very unlikely to be the size of a chunk.
+    LocatedBlock lb = getFirstLocatedBlock();
+    testReadBlockCase(lb, readOffset, readLength);
+  }
+
 }
