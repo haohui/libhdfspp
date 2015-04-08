@@ -67,14 +67,20 @@ void RemoteBlockReader<Stream>::async_connect(const std::string &client_name,
   AppendToDelimitedString(&p, &s->request);
 
   auto prog = monad::Write(stream_, asio::buffer(s->request))
-          >>= ReadPBMessage(stream_, &s->response);
+          >>= ReadPBMessageMonad<Stream, hadoop::hdfs::BlockOpResponseProto, 16384>
+              (stream_, &s->response);
 
   auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
   m->Run([m,s,this,handler](const Status &status) {
-      if (status.ok()) {
-        state_ = kReadPacketHeader;
+      Status stat = status;
+      if (stat.ok()) {
+        if (s->response.status() == ::hadoop::hdfs::Status::SUCCESS) {
+          state_ = kReadPacketHeader;
+        } else {
+          stat = Status::Error(s->response.message().c_str());
+        }
       }
-      handler(status);
+      handler(stat);
     });
 }
 
