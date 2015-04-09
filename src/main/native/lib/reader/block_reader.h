@@ -73,7 +73,7 @@ class RemoteBlockReader {
   State state_;
   BlockReaderOptions options_;
   size_t packet_len_;
-  size_t packet_read_bytes_;
+  int packet_data_read_bytes_;
   long long bytes_to_read_;
   std::vector<char> checksum_;
 };

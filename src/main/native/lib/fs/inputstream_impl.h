@@ -68,6 +68,7 @@ struct InputStreamImpl::ReadBlockMonad : monad::Monad<> {
                  size_t *transferred)
       : reader_(reader)
       , buffer_(buffer)
+      , buffer_size_(asio::buffer_size(buffer))
       , transferred_(transferred)
   {}
 
@@ -76,16 +77,32 @@ struct InputStreamImpl::ReadBlockMonad : monad::Monad<> {
 
   template<class Next>
   void Run(const Next& next) {
-    reader_->async_read_some(buffer_, [this,next](const Status &status, size_t transferred) {
-        *transferred_ = transferred;
-        next(status);
-      });
+    *transferred_ = 0;
+    next_ = next;
+    OnReadData(Status::OK(), 0);
   }
 
  private:
   Reader *reader_;
   MutableBufferSequence buffer_;
+  const size_t buffer_size_;
   size_t *transferred_;
+  std::function<void(const Status &)> next_;
+
+  void OnReadData(const Status &status, size_t transferred) {
+    using std::placeholders::_1;
+    using std::placeholders::_2;
+    *transferred_ += transferred;
+    if (!status.ok()) {
+      next_(status);
+    } else if (*transferred_ >= buffer_size_) {
+      next_(status);
+    } else {
+      reader_->async_read_some(
+          asio::buffer(buffer_ + *transferred_, buffer_size_ - *transferred_),
+          std::bind(&ReadBlockMonad::OnReadData, this, _1, _2));
+    }
+  }
 };
 
 
@@ -100,7 +117,7 @@ void InputStreamImpl::AsyncPreadSome(
   auto it = std::find_if(
       blocks_.begin(), blocks_.end(),
       [offset](const LocatedBlockProto &p) {
-        return p.offset() <= offset && offset <= p.offset() + p.b().numbytes();
+        return p.offset() <= offset && offset < p.offset() + p.b().numbytes();
       });
 
   if (it == blocks_.end()) {
@@ -113,7 +130,7 @@ void InputStreamImpl::AsyncPreadSome(
 
   uint64_t offset_within_block = offset - it->offset();
   uint64_t size_within_block =
-      std::min<uint64_t>(it->b().numbytes(), asio::buffer_size(buffers));
+      std::min<uint64_t>(it->b().numbytes() - offset_within_block, asio::buffer_size(buffers));
 
   struct State {
     tcp::socket conn;
@@ -139,7 +156,7 @@ void InputStreamImpl::AsyncPreadSome(
   auto prog = monad::Connect(&s->conn, s->endpoints.begin(), s->endpoints.end())
           >>= HandshakeMonad(&s->reader, fs_->rpc_engine().client_name(), nullptr,
                              &s->block.b(), size_within_block, offset_within_block)
-          >>= ReadBlockMonad<::asio::mutable_buffers_1>(&s->reader, buffers, &s->transferred);
+          >>= ReadBlockMonad<::asio::mutable_buffers_1>(&s->reader, asio::buffer(buffers, size_within_block), &s->transferred);
 
   auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
   m->Run([m,s,this,handler](const Status &status) {

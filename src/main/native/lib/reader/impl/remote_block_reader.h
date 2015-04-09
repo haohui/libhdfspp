@@ -93,7 +93,7 @@ struct RemoteBlockReader<Stream>::ReadPacketHeader : monad::Monad<> {
   ReadPacketHeader &operator=(ReadPacketHeader &&) = default;
   template<class Next>
   void Run(const Next& next) {
-    self_->packet_read_bytes_ = self_->packet_len_ = 0;
+    self_->packet_data_read_bytes_ = self_->packet_len_ = 0;
     auto handler = [next, this](const asio::error_code &ec, size_t) {
       Status status;
       if (ec) {
@@ -195,8 +195,8 @@ struct RemoteBlockReader<Stream>::ReadData : monad::Monad<> {
       }
       *bytes_transferred_ += transferred;
       self_->bytes_to_read_ -= transferred;
-      self_->packet_read_bytes_ += transferred;
-      if (self_->packet_read_bytes_ >= self_->packet_len_) {
+      self_->packet_data_read_bytes_ += transferred;
+      if (self_->packet_data_read_bytes_ >= self_->header_.datalen()) {
         self_->state_ = kReadPacketHeader;
       }
       next(status);

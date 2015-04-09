@@ -160,6 +160,8 @@
             <configuration>
               <javahPath>${env.JAVA_HOME}/bin/javah</javahPath>
               <javahClassNames>
+                <javahClassName>me.haohui.libhdfspp.NativeFileSystem</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeInputStream</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeIoService</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeTcpConnection</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeRemoteBlockReader</javahClassName>
