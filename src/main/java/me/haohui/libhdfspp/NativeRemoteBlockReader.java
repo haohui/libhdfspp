@@ -38,6 +38,7 @@ class NativeRemoteBlockReader implements Closeable {
     int v = readSome(handle, dst, dst.position(), dst.limit(), s);
     NativeStatus stat = new NativeStatus(s[0]);
     stat.checkForIOException();
+    dst.position(dst.position() + v);
     return v;
   }
 
