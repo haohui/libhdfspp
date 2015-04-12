@@ -40,6 +40,8 @@ public class TestInputStream {
     final int PACKET_SIZE = 65536;
     final int FILE_SIZE = 4 * PACKET_SIZE;
     final byte[] contents = new byte[FILE_SIZE];
+    final int OFFSET_IN_TRUNK = 1;
+
     Random rand = new Random();
     rand.nextBytes(contents);
     try (OutputStream os = cluster.getFileSystem().create(new Path("/foo"))) {
@@ -60,13 +62,26 @@ public class TestInputStream {
           buf.get(readContents);
           Assert.assertArrayEquals(contents, readContents);
         }
+
+        // Read in the middle of the chunk
+        buf = ByteBuffer.allocateDirect(FILE_SIZE - OFFSET_IN_TRUNK);
+        try (NativeInputStream is = fs.open(new Path("/foo"))) {
+          int r = is.positionRead(buf, OFFSET_IN_TRUNK);
+          assertEquals(FILE_SIZE - OFFSET_IN_TRUNK, r);
+          buf.flip();
+          assertEquals(FILE_SIZE - OFFSET_IN_TRUNK, buf.remaining());
+          byte[] readContents = new byte[buf.remaining()];
+          buf.get(readContents);
+          byte[] cont = new byte[FILE_SIZE - OFFSET_IN_TRUNK];
+          System.arraycopy(contents, OFFSET_IN_TRUNK, cont, 0, cont.length);
+          Assert.assertArrayEquals(cont, readContents);
+        }
       }
     }
   }
 
   @Test
-  public void testReadMultipleBlocks() throws IOException,
-                                              InterruptedException {
+  public void testReadMultipleBlocks() throws IOException, InterruptedException {
     final int BLOCK_SIZE = 128 * 1024;
     final int FILE_SIZE = 2 * BLOCK_SIZE;
     final byte[] contents = new byte[FILE_SIZE];
@@ -102,4 +117,5 @@ public class TestInputStream {
       }
     }
   }
+
 }

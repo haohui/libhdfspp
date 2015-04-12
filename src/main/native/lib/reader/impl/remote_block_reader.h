@@ -49,7 +49,7 @@ void RemoteBlockReader<Stream>::async_connect(const std::string &client_name,
                                               const hadoop::hdfs::ExtendedBlockProto *block,
                                               uint64_t length, uint64_t offset,
                                               const ConnectHandler &handler) {
-  // TODO: The total number of bytes that we need to transfer from the DN is
+  // The total number of bytes that we need to transfer from the DN is
   // the amount that the user wants (bytesToRead), plus the padding at
   // the beginning in order to chunk-align. Note that the DN may elect
   // to send more than this amount if the read starts/ends mid-chunk.
@@ -71,10 +71,15 @@ void RemoteBlockReader<Stream>::async_connect(const std::string &client_name,
               (stream_, &s->response);
 
   auto m = std::shared_ptr<decltype(prog)>(new decltype(prog)(std::move(prog)));
-  m->Run([m,s,this,handler](const Status &status) {
+  m->Run([m,s,this,handler,offset](const Status &status) {
       Status stat = status;
       if (stat.ok()) {
-        if (s->response.status() == ::hadoop::hdfs::Status::SUCCESS) {
+        const auto &resp = s->response;
+        if (resp.status() == ::hadoop::hdfs::Status::SUCCESS) {
+          if(resp.has_readopchecksuminfo()) {
+            const auto& checksum_info = resp.readopchecksuminfo();
+            chunk_padding_bytes_ = offset - checksum_info.chunkoffset();
+          }
           state_ = kReadPacketHeader;
         } else {
           stat = Status::Error(s->response.message().c_str());
@@ -108,7 +113,7 @@ struct RemoteBlockReader<Stream>::ReadPacketHeader : monad::Monad<> {
     };
 
     asio::async_read(*self_->stream_, asio::buffer(buf_),
-                     std::bind(&ReadPacketHeader::CompletionHandler, this, 
+                     std::bind(&ReadPacketHeader::CompletionHandler, this,
                                std::placeholders::_1, std::placeholders::_2),
                      handler);
   }
@@ -154,12 +159,12 @@ struct RemoteBlockReader<Stream>::ReadChecksum : monad::Monad<> {
 
   template<class Next>
   void Run(const Next& next) {
-    auto handler = [next, this](const asio::error_code &ec, size_t) {
+    auto handler = [next,this](const asio::error_code &ec, size_t) {
       Status status;
       if (ec) {
         status = Status(ec.value(), ec.message().c_str());
       } else {
-        self_->state_ = kReadData;
+        self_->state_ = self_->chunk_padding_bytes_ ? kReadPadding : kReadData;
       }
       next(status);
     };
@@ -171,6 +176,39 @@ struct RemoteBlockReader<Stream>::ReadChecksum : monad::Monad<> {
   RemoteBlockReader<Stream> *self_;
   ReadChecksum(const ReadChecksum &) = delete;
   ReadChecksum &operator=(const ReadChecksum &) = delete;
+};
+
+template<class Stream>
+struct RemoteBlockReader<Stream>::ReadPadding : monad::Monad<> {
+  ReadPadding(RemoteBlockReader<Stream> *self)
+      : self_(self)
+      , padding_(self->chunk_padding_bytes_)
+      , bytes_transferred_(std::make_shared<size_t>(0))
+      , prog_(ReadData<asio::mutable_buffers_1>(self, bytes_transferred_, asio::buffer(padding_)))
+  {}
+  ReadPadding(ReadPadding &&) = default;
+  ReadPadding &operator=(ReadPadding &&) = default;
+
+  template<class Next>
+  void Run(const Next& next) {
+    auto h = [next,this](const Status &status) {
+      if (status.ok()) {
+        assert(reinterpret_cast<const int&>(*bytes_transferred_) == self_->chunk_padding_bytes_);
+        self_->chunk_padding_bytes_ = 0;
+        self_->state_ = kReadData;
+      }
+      next(status);
+    };
+    prog_.Run(h);
+  }
+
+ private:
+  RemoteBlockReader<Stream> *self_;
+  std::vector<char> padding_;
+  std::shared_ptr<size_t> bytes_transferred_;
+  RemoteBlockReader::ReadData<asio::mutable_buffers_1> prog_;
+  ReadPadding(const ReadPadding &) = delete;
+  ReadPadding &operator=(const ReadPadding &) = delete;
 };
 
 template<class Stream>
@@ -201,7 +239,8 @@ struct RemoteBlockReader<Stream>::ReadData : monad::Monad<> {
       }
       next(status);
     };
-    auto data_len = self_->header_.datalen();
+
+    auto data_len = self_->header_.datalen() - self_->packet_data_read_bytes_;
     async_read(*self_->stream_, buf_, asio::transfer_exactly(data_len), handler);
   }
 
@@ -254,10 +293,11 @@ void RemoteBlockReader<Stream>::async_read_some(const MutableBufferSequence& buf
   *bytes_transferred = 0;
 
   // TODO: Verify checksum
-  // TODO: End the pipeline
 
   auto prog = EnableIf([this]() { return state_ == kReadPacketHeader; },
                        std::move(ReadPacketHeader(this) >>= ReadChecksum(this)))
+          >>= EnableIf([this]() { return state_ == kReadPadding && chunk_padding_bytes_; },
+                       ReadPadding(this))
           >>= ReadData<MutableBufferSequence>(this, bytes_transferred, buffers)
           >>= EnableIf([this]() { return bytes_to_read_ <= 0; }, AckRead(this));
 

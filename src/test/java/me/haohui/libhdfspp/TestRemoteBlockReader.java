@@ -169,4 +169,13 @@ public class TestRemoteBlockReader {
     chars[63] = '+';
     return chars;
   }
+
+  @Test
+  public void testReadIntoChecksumChunk() throws IOException, InterruptedException {
+    int readLength = BLOCK_SIZE / 4;
+    int readOffset = 11;
+    LocatedBlock lb = getFirstLocatedBlock();
+    testReadBlockCase(lb, readOffset, readLength);
+  }
+
 }
