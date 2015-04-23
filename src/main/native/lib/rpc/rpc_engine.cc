@@ -38,18 +38,19 @@ RpcEngine::RpcEngine(::asio::io_service *io_service,
 {}
 
 Status RpcEngine::Connect(const ::asio::ip::tcp::endpoint &server) {
-  std::promise<Status> stat;
   using ::asio::ip::tcp;
+  auto stat = std::make_shared<std::promise<Status>>();
+  std::future<Status> future(stat->get_future());
   std::vector<tcp::endpoint> ep;
   ep.push_back(server);
-  conn_.Connect(ep.begin(), ep.end(), [this,&stat](const Status &status) {
+  conn_.Connect(ep.begin(), ep.end(), [this,stat](const Status &status) {
       if (!status.ok()) {
-        stat.set_value(status);
+        stat->set_value(status);
         return;
       }
-      conn_.Handshake([this,&stat](const Status &status) { stat.set_value(status); });
+      conn_.Handshake([this,stat](const Status &status) { stat->set_value(status); });
     });
-  return stat.get_future().get();
+  return future.get();
 }
 
 void RpcEngine::StartReadLoop() {
@@ -63,20 +64,22 @@ void RpcEngine::Shutdown() {
 Status RpcEngine::Rpc(const std::string &method_name,
                       const ::google::protobuf::MessageLite *req,
                       const std::shared_ptr<::google::protobuf::MessageLite> &resp) {
-  std::promise<Status> stat;
-  AsyncRpc(method_name, req, resp, [&stat](const Status &status) {
-      stat.set_value(status);
+  auto stat = std::make_shared<std::promise<Status>>();
+  std::future<Status> future(stat->get_future());
+  AsyncRpc(method_name, req, resp, [stat](const Status &status) {
+      stat->set_value(status);
     });
-  return stat.get_future().get();
+  return future.get();
 }
 
 Status RpcEngine::RawRpc(const std::string &method_name, const std::string &req,
                          std::shared_ptr<std::string> resp) {
-  std::promise<Status> stat;
-  conn_.AsyncRawRpc(method_name, req, resp, [&stat](const Status &status) {
-      stat.set_value(status);
+  auto stat = std::make_shared<std::promise<Status>>();
+  std::future<Status> future(stat->get_future());
+  conn_.AsyncRawRpc(method_name, req, resp, [stat](const Status &status) {
+      stat->set_value(status);
     });
-  return stat.get_future().get();
+  return future.get();
 }
 
 std::string RpcEngine::GetRandomClientName() {

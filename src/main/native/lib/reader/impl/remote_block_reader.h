@@ -311,13 +311,14 @@ template<class Stream>
 template<class MutableBufferSequence>
 size_t RemoteBlockReader<Stream>::read_some(const MutableBufferSequence& buffers, Status *status) {
   size_t transferred = 0;
-  std::promise<bool> done;
-  async_read_some(buffers, [status,&transferred,&done](const Status &stat, size_t t) {
+  auto done = std::make_shared<std::promise<void> >();
+  auto future = done->get_future();
+  async_read_some(buffers, [status,&transferred,done](const Status &stat, size_t t) {
       *status = stat;
       transferred = t;
-      done.set_value(true);
+      done->set_value();
     });
-  done.get_future().wait();
+  future.wait();
   return transferred;
 }
 
@@ -326,11 +327,11 @@ Status RemoteBlockReader<Stream>::connect(const std::string &client_name,
                                           const hadoop::common::TokenProto *token,
                                           const hadoop::hdfs::ExtendedBlockProto *block,
                                           uint64_t length, uint64_t offset) {
-  std::promise<Status> done;
-  async_connect(client_name, token, block, length, offset, [&done](const Status &status) {
-      done.set_value(status);
-    });
-  return done.get_future().get();
+  auto stat = std::make_shared<std::promise<Status>>();
+  std::future<Status> future(stat->get_future());
+  async_connect(client_name, token, block, length, offset,
+                [stat](const Status &status) { stat->set_value(status); });
+  return future.get();
 }
 
 }

@@ -39,14 +39,15 @@ InputStreamImpl::InputStreamImpl(FileSystemImpl *fs, const LocatedBlocksProto *b
 }
 
 Status InputStreamImpl::PositionRead(void *buf, size_t nbyte, size_t offset, size_t *read_bytes) {
-  std::promise<Status> stat;
-  auto handler = [&stat,read_bytes](const Status &status, size_t transferred) {
+  auto stat = std::make_shared<std::promise<Status>>();
+  std::future<Status> future(stat->get_future());
+  auto handler = [stat,read_bytes](const Status &status, size_t transferred) {
     *read_bytes = transferred;
-    stat.set_value(status);
+    stat->set_value(status);
   };
   
   AsyncPreadSome(offset, asio::buffer(buf, nbyte), handler);
-  return stat.get_future().get();
+  return future.get();
 }
 
 }
