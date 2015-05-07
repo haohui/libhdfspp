@@ -6,7 +6,10 @@ MARKDOWN_SUPPORT       = YES
 BUILTIN_STL_SUPPORT    = YES
 
 
-INPUT                  = @CMAKE_SOURCE_DIR@/doc/mainpage.dox
+INPUT                  = @CMAKE_SOURCE_DIR@/doc/mainpage.dox \
+                         @CMAKE_SOURCE_DIR@/include/libhdfs++ \
+                         @CMAKE_SOURCE_DIR@/lib/common/continuation \
+
 INPUT_ENCODING         = UTF-8
 RECURSIVE              = NO
 
