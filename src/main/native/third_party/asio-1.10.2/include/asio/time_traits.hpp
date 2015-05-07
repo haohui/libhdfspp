@@ -17,9 +17,6 @@
 
 #include "asio/detail/socket_types.hpp" // Must come before posix_time.
 
-#if defined(ASIO_HAS_BOOST_DATE_TIME) \
-  || defined(GENERATING_DOCUMENTATION)
-
 #include "asio/detail/push_options.hpp"
 #include <boost/date_time/posix_time/posix_time_types.hpp>
 #include "asio/detail/pop_options.hpp"
@@ -31,6 +28,9 @@ namespace asio {
 /// Time traits suitable for use with the deadline timer.
 template <typename Time>
 struct time_traits;
+
+#if defined(ASIO_HAS_BOOST_DATE_TIME) \
+  || defined(GENERATING_DOCUMENTATION)
 
 /// Time traits specialised for posix_time.
 template <>
@@ -78,11 +78,11 @@ struct time_traits<boost::posix_time::ptime>
   }
 };
 
+#endif // defined(ASIO_HAS_BOOST_DATE_TIME)
+       // || defined(GENERATING_DOCUMENTATION)
+
 } // namespace asio
 
 #include "asio/detail/pop_options.hpp"
-
-#endif // defined(ASIO_HAS_BOOST_DATE_TIME)
-       // || defined(GENERATING_DOCUMENTATION)
 
 #endif // ASIO_TIME_TRAITS_HPP

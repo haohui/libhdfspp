@@ -17,9 +17,6 @@
 
 #include "asio/detail/config.hpp"
 
-#if defined(ASIO_HAS_BOOST_DATE_TIME) \
-  || defined(GENERATING_DOCUMENTATION)
-
 #include <cstddef>
 #include "asio/basic_io_object.hpp"
 #include "asio/deadline_timer_service.hpp"
@@ -511,8 +508,5 @@ public:
 } // namespace asio
 
 #include "asio/detail/pop_options.hpp"
-
-#endif // defined(ASIO_HAS_BOOST_DATE_TIME)
-       // || defined(GENERATING_DOCUMENTATION)
 
 #endif // ASIO_BASIC_DEADLINE_TIMER_HPP
