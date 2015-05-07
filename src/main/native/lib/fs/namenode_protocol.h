@@ -15,36 +15,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef LIBHDFSPP_HDFS_H_
-#define LIBHDFSPP_HDFS_H_
+#ifndef FS_NAMENODE_PROTOCOL_H_
+#define FS_NAMENODE_PROTOCOL_H_
 
-#include "libhdfs++/status.h"
+#include "ClientNamenodeProtocol.pb.h"
+#include "rpc/rpc_engine.h"
 
 namespace hdfs {
 
-class IoService {
+class ClientNamenodeProtocol {
  public:
-  static IoService *New();
-  virtual void Run() = 0;
-  virtual void Stop() = 0;
-  virtual ~IoService();
+  ClientNamenodeProtocol(RpcEngine *engine)
+      : engine_(engine)
+  {}
+
+  Status GetBlockLocations(const ::hadoop::hdfs::GetBlockLocationsRequestProto *request,
+                           std::shared_ptr<::hadoop::hdfs::GetBlockLocationsResponseProto> response) {
+    return engine_->Rpc("getBlockLocations", request, response);
+  }
+ private:
+  RpcEngine *engine_;
 };
 
-
-class InputStream {
- public:
-  virtual Status PositionRead(void *buf, size_t nbyte, size_t offset, size_t *read_bytes) = 0;
-  virtual ~InputStream();
 };
-
-class FileSystem {
- public:
-  static Status New(IoService *io_service, const char *server,
-                    unsigned short port, FileSystem **fsptr);
-  virtual Status Open(const char *path, InputStream **isptr) = 0;
-  virtual ~FileSystem();
-};
-
-}
 
 #endif
