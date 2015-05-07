@@ -14,11 +14,16 @@ include_directories(${JNI_INCLUDE_DIRS})
 endif()
 
 find_package(Protobuf REQUIRED)
+find_package(OpenSSL REQUIRED)
 find_package(Doxygen)
 find_package(Threads)
 
+include_directories(include)
+include_directories(lib)
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 include_directories(${CMAKE_BINARY_DIR}/lib/proto)
+include_directories(third_party/asio-1.10.2/include)
+include_directories(third_party/gtest-1.7.0/include)
 
 add_definitions(-DASIO_STANDALONE)
 if(UNIX)
