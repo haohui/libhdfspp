@@ -50,6 +50,17 @@
         <version>${hadoop.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-hdfs</artifactId>
+        <version>${hadoop.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.hadoop</groupId>
+        <artifactId>hadoop-hdfs</artifactId>
+        <type>test-jar</type>
+        <version>${hadoop.version}</version>
+      </dependency>
+      <dependency>
         <groupId>com.google.protobuf</groupId>
         <artifactId>protobuf-java</artifactId>
         <version>${protobuf.version}</version>
@@ -69,6 +80,16 @@
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
+      <scope>test</scope>
+      <type>test-jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
@@ -136,7 +157,9 @@
               <javahPath>${env.JAVA_HOME}/bin/javah</javahPath>
               <javahClassNames>
                 <javahClassName>me.haohui.libhdfspp.NativeIoService</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeRemoteBlockReader</javahClassName>
                 <javahClassName>me.haohui.libhdfspp.NativeRpcEngine</javahClassName>
+                <javahClassName>me.haohui.libhdfspp.NativeTcpConnection</javahClassName>
               </javahClassNames>
               <javahOutputDirectory>${project.build.directory}/libhdfspp/javah</javahOutputDirectory>
             </configuration>
