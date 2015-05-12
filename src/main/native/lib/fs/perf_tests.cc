@@ -73,6 +73,41 @@ void n_threaded_random_seek(hdfsFS fs, std::string path, int threadcount,
                                 off_t window_min = 0,
                                 off_t window_max = 32 * MB);
 
+void open_read_close_test(hdfsFS fs, std::string path) {
+  const int iterations = 1000;
+
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(0, MB * 32);      //assume > 32MB file, size should be passed by param
+
+  const int read_size = 64;
+ 
+  for(int i=0;i<iterations;i++) {
+    if(i%100 == 0 && i != 0)
+      std::cout << "completed " << i << " cycles" << std::endl;
+
+    //open
+    hdfsFile file = hdfsOpenFile(fs, path.c_str(), 0, 0, 0, 0);
+
+    //read from random offset onto buffer on stack
+    char buf[read_size];
+    off_t offset = dis(gen);
+    std::int64_t read_bytes = hdfsPread(fs, file, offset, buf, read_size);
+
+    if(read_bytes != read_size) {
+      std::cerr << "Read failed.  Wanted " << read_size << " bytes, read " << read_bytes << " bytes at offset " << offset << std::endl;
+    }
+
+    //close
+    int res = hdfsCloseFile(fs, file);
+    if(0 != res) {
+      std::cerr << "failed to close file on iteration " << i << std::endl; 
+    }
+  }
+
+}
+
 
 
 
@@ -90,6 +125,8 @@ int main(int argc, char **argv) {
     n_threaded_linear_scan(fs, argv[3], scan_thread_count, 128*KB, 0, 32*MB);
   } else if (cmd == "-threaded_seek") {
     n_threaded_random_seek(fs, argv[3], seek_thread_count, 10000, 0, 32 * MB);
+  } else if (cmd == "-open_read_close") {
+    open_read_close_test(fs, argv[3]);
   } else {
     std::cerr << "command " << cmd << " not recognized" << std::endl;
   }
