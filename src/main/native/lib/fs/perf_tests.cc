@@ -13,16 +13,10 @@
 
 /*
     Basic perfomance/stress tests for libhdfs++.  
-    Currently gets the job done but things to do are:
-        -#threads should be cmd line parameter
-        -#seeks, read sizes, etc should be command line parameters
-        -aggragate thread statistics, print nicer output
 */
 
-const int scan_thread_count = 8;
-const int seek_thread_count = 8;
 
-//default to reading 1MB blocks for linear scans
+//useful constants
 static const size_t KB = 1024;
 static const size_t MB = 1024 * 1024;
 
@@ -31,7 +25,7 @@ struct seek_info {
   seek_info() : seek_count(0), fail_count(0), runtime(0) {};
   std::string str() {
     std::stringstream ss;
-    ss << "seeks: " << seek_count << " failed reads:" << fail_count << " runtime:" << runtime << " seeks/sec:" << (seek_count+fail_count)/runtime;
+    ss << "seeks: " << seek_count << ", failed seeks:" << fail_count << " runtime:" << runtime << " seeks/sec:" << (seek_count+fail_count)/runtime;
     return ss.str();
   }
 
@@ -73,60 +67,68 @@ void n_threaded_random_seek(hdfsFS fs, std::string path, int threadcount,
                                 off_t window_min = 0,
                                 off_t window_max = 32 * MB);
 
-void open_read_close_test(hdfsFS fs, std::string path) {
-  const int iterations = 1000;
+
+void open_read_close_test(hdfsFS fs, std::string path, 
+                                size_t read_size = 1,          //number of bytes to read per cycle
+                                unsigned int cycle_count = 1000,     //number of open-read-close cycles
+                                off_t window_min = 0,         //min offset into file
+                                off_t window_max = 32 * MB);  //max offset into file
 
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(0, MB * 32);      //assume > 32MB file, size should be passed by param
-
-  const int read_size = 64;
- 
-  for(int i=0;i<iterations;i++) {
-    if(i%100 == 0 && i != 0)
-      std::cout << "completed " << i << " cycles" << std::endl;
-
-    //open
-    hdfsFile file = hdfsOpenFile(fs, path.c_str(), 0, 0, 0, 0);
-
-    //read from random offset onto buffer on stack
-    char buf[read_size];
-    off_t offset = dis(gen);
-    std::int64_t read_bytes = hdfsPread(fs, file, offset, buf, read_size);
-
-    if(read_bytes != read_size) {
-      std::cerr << "Read failed.  Wanted " << read_size << " bytes, read " << read_bytes << " bytes at offset " << offset << std::endl;
-    }
-
-    //close
-    int res = hdfsCloseFile(fs, file);
-    if(0 != res) {
-      std::cerr << "failed to close file on iteration " << i << std::endl; 
-    }
-  }
-
-}
 
 
 
 
 int main(int argc, char **argv) {
-  if(argc != 5) {
-    std::cout << "usage: ./perf_tests <host> <port> <file> [-threaded_read, -threaded_seek]" << std::endl;
+  if(argc < 5) {
+    std::cout << "usage: ./perf_tests <host> <port> <file> [-threaded_read, -threaded_seek, -open_read_close]" << std::endl;
+    std::cout << "\t-threaded_read <threadcount> <read size> <max offset>" << std::endl;
+    std::cout << "\t-threaded_seek <threadcount> <number of seeks> <max offset>" << std::endl;
+    std::cout << "\t-open_read_close <read size> <number of cycles> <max offset>" << std::endl;
+
     return 1;
   }
   
+  hdfsFS fs = hdfsConnect(argv[1], std::atoi(argv[2])); 
+  
   std::string cmd(argv[4]);
-  hdfsFS fs = hdfsConnect(argv[1], std::atoi(argv[2]));   
-
-
   if(cmd == "-threaded_read") {
-    n_threaded_linear_scan(fs, argv[3], scan_thread_count, 128*KB, 0, 32*MB);
+    //Start a number of threads and have them scan through a file.  Helpful for reproducing threading issues.
+    if(argc != 8) {
+      std::cerr << "usage ./perf_tests <host> <port> <file> -threaded_read <thread count> <read size> <max offset>" << std::endl;
+      return 1;
+    }
+
+    int threadcount = std::atoi( argv[5] );
+    int readsize    = std::atoi( argv[6] );
+    int maxoffset   = std::atoi( argv[7] );
+
+    n_threaded_linear_scan(fs, argv[3], threadcount, readsize, 0/*min offset*/, maxoffset);
   } else if (cmd == "-threaded_seek") {
-    n_threaded_random_seek(fs, argv[3], seek_thread_count, 10000, 0, 32 * MB);
+    //Start a number of threads and have them do 1 byte reads at random offsets.
+    if(argc != 8) {
+      std::cerr << "usage ./perf_tests <host> <port> <file> -threaded_seek <thread count> <seek count> <max offset>" << std::endl;
+      return 1;
+    }
+
+    int threadcount = std::atoi( argv[5] );
+    int seekcount   = std::atoi( argv[6] );
+    int maxoffset   = std::atoi( argv[7] );
+
+    n_threaded_random_seek(fs, argv[3], threadcount, seekcount, 0/*min offset*/, maxoffset);
   } else if (cmd == "-open_read_close") {
-    open_read_close_test(fs, argv[3]);
+    //Similar to random seek, but close fd between each seek operation.  Helpful for getting memory leaks to show up.
+    if(argc != 8) {
+      std::cerr << "usage ./perf_tests <host> <port> <file> -open_read_close <read size> <number of cycles> <max offset>" << std::endl;
+      return 1;
+    }
+
+    int readsize  = std::atoi( argv[5] );
+    int numcycles = std::atoi( argv[6] );
+    int maxoffset = std::atoi( argv[7] );     
+
+
+    open_read_close_test(fs, argv[3], readsize, numcycles, 0/*min offset*/, maxoffset);
   } else {
     std::cerr << "command " << cmd << " not recognized" << std::endl;
   }
@@ -226,7 +228,11 @@ void n_threaded_linear_scan(hdfsFS fs, std::string path, int threadcount,
                                 off_t start,
                                 off_t end) 
 {
-  std::cout << "concurrency max is " << std::thread::hardware_concurrency() << std::endl;
+  //note: Not going to attempt to aggragate the read bandwidths because there are no 
+  //  guarentees that the threads will be operating in parallel for the majority of
+  //  the test.  
+
+  std::cout << "hardware concurrency max is " << std::thread::hardware_concurrency() << std::endl;
 
   std::vector<scanner> scanners;
   std::vector<std::thread> threads;
@@ -282,7 +288,7 @@ void n_threaded_random_seek(hdfsFS fs, std::string path, int threadcount,
                                 off_t window_min,
                                 off_t window_max)
 {
-  std::cout << "concurrency max is " << std::thread::hardware_concurrency() << std::endl;
+  std::cout << "hardware concurrency max is " << std::thread::hardware_concurrency() << std::endl;
 
   std::vector<seeker> seekers;
   std::vector<std::thread> threads;
@@ -309,8 +315,44 @@ void n_threaded_random_seek(hdfsFS fs, std::string path, int threadcount,
 }
 
 
+void open_read_close_test(hdfsFS fs, std::string path, size_t read_size, unsigned int cycle_count, off_t window_min, off_t window_max) {
 
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(window_min, window_max - read_size);      //assume > 32MB file, size should be passed by param
+ 
+  std::vector<char> buf;
+  buf.resize(read_size);  
 
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+  start = std::chrono::system_clock::now();
+
+  for(unsigned int i=0;i<cycle_count;i++) {
+    //open
+    hdfsFile file = hdfsOpenFile(fs, path.c_str(), 0, 0, 0, 0);
+
+    //read from random offset onto buffer
+    off_t offset = dis(gen);
+    std::int64_t read_bytes = hdfsPread(fs, file, offset, &buf[0], read_size);
+
+    if( (size_t)read_bytes != read_size) {
+      std::cerr << "Read failed.  Wanted " << read_size << " bytes, read " << read_bytes << " bytes at offset " << offset << std::endl;
+    }
+
+    //close
+    int res = hdfsCloseFile(fs, file);
+    if(0 != res) {
+      std::cerr << "failed to close file on iteration " << i << std::endl; 
+    }
+  }
+
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  double dt = elapsed.count();
+
+  std::cout << "completed " << cycle_count << " cycles in " << dt << " seconds. " << cycle_count/dt << " cycles/second" << std::endl;
+
+}
 
 
 
