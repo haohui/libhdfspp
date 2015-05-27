@@ -23,7 +23,7 @@
 //
 
 #ifndef INCLUDE_LIBHDFSPP_CHDFS_H_
-#define INCLUDE_LIBHDFSPP_CHDFS_H
+#define INCLUDE_LIBHDFSPP_CHDFS_H_
 
 #include "stdlib.h"
 
@@ -94,13 +94,6 @@ extern "C" {
   size_t hdfsPread(hdfsFS fs, hdfsFile file, off_t position, void *buf, size_t length);
 }
 
-/*  todo, roughly in order of priority, before write path is complete
- *    tSize hdfsRead(hdfsFS fs, hdfsFile file, void* buffer, tSize length);
- *    int hdfsExists(hdfsFS fs, const char *path);
- *    int hdfsSeek(hdfsFS fs, hdfsFile file, tOffset desiredPos);
- *    tOffset hdfsTell(hdfsFS fs, hdfsFile file);
- *
- */
 
 #endif
 
