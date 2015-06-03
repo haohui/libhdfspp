@@ -29,6 +29,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 
 namespace hdfs {
 
@@ -93,6 +94,8 @@ class RpcConnection {
   std::vector<std::shared_ptr<RequestBase> > pending_requests_;
   // Requests that are waiting for responses
   std::unordered_map<int, std::shared_ptr<RequestBase> > requests_on_fly_;
+  // Lock for operations on request_over_the_wire_, pending_requests_, and requests_on_fly
+  std::recursive_mutex request_lock_;
 
   template <class Handler>
   void StartRpc(std::string &&request, const Handler &handler);
