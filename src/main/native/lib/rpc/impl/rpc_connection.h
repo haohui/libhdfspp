@@ -99,6 +99,8 @@ void RpcConnection::AsyncRpc(const std::string &method_name,
                              const ::google::protobuf::MessageLite *req,
                              std::shared_ptr<::google::protobuf::MessageLite> resp,
                              const Handler &handler) {
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
+
   auto wrapped_handler = [resp,handler](::google::protobuf::io::CodedInputStream *is, const Status &status) {
     if (status.ok()) {
       ReadDelimitedPBMessage(is, resp.get());
@@ -116,6 +118,8 @@ void RpcConnection::AsyncRawRpc(const std::string &method_name,
                                 const std::string &req,
                                 std::shared_ptr<std::string> resp,
                                 const Handler &handler) {
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
+
   auto wrapped_handler = [this,resp,handler](::google::protobuf::io::CodedInputStream *is, const Status &status) {
     if (status.ok()) {
       uint32_t size = 0;
