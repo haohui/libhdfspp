@@ -29,6 +29,7 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
 
 namespace hdfs {
 
@@ -102,6 +103,8 @@ protected:
   std::vector<std::shared_ptr<Request>> pending_requests_;
   // Requests that are waiting for responses
   std::unordered_map<int, std::shared_ptr<Request>> requests_on_fly_;
+  // Lock for mutable parts of this class that need to be thread safe
+  std::mutex engine_state_lock_;
 };
 
 class RpcEngine {

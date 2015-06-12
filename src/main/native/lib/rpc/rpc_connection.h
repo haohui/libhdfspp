@@ -75,6 +75,7 @@ void RpcConnectionImpl<NextLayer>::OnSendCompleted(const ::asio::error_code &ec,
                                                    size_t) {
   using std::placeholders::_1;
   using std::placeholders::_2;
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
 
   request_over_the_wire_.reset();
   if (ec) {
@@ -104,6 +105,7 @@ void RpcConnectionImpl<NextLayer>::OnRecvCompleted(const ::asio::error_code &ec,
                                                    size_t) {
   using std::placeholders::_1;
   using std::placeholders::_2;
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
 
   switch (ec.value()) {
   case 0:

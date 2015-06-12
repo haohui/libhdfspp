@@ -183,6 +183,8 @@ std::shared_ptr<std::string> RpcConnection::PrepareHandshakePacket() {
 void RpcConnection::AsyncRpc(
     const std::string &method_name, const ::google::protobuf::MessageLite *req,
     std::shared_ptr<::google::protobuf::MessageLite> resp, Callback &&handler) {
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
+
   auto wrapped_handler =
       [resp, handler](pbio::CodedInputStream *is, const Status &status) {
         if (status.ok()) {
@@ -201,6 +203,8 @@ void RpcConnection::AsyncRawRpc(const std::string &method_name,
                                 const std::string &req,
                                 std::shared_ptr<std::string> resp,
                                 Callback &&handler) {
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
+
   auto wrapped_handler =
       [this, resp, handler](pbio::CodedInputStream *is, const Status &status) {
         if (status.ok()) {
