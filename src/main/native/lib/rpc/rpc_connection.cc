@@ -125,7 +125,7 @@ RpcConnection::RpcConnection(RpcEngine *engine)
 }
 
 void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
-  std::lock_guard<std::recursive_mutex> request_lock(request_lock_);
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
 
   request_over_the_wire_.reset();
   if (ec) {
@@ -150,7 +150,7 @@ void RpcConnection::OnHandleWrite(const ::asio::error_code &ec, size_t) {
 }
 
 void RpcConnection::OnHandleRead(const ::asio::error_code &ec, size_t) {
-  std::lock_guard<std::recursive_mutex> request_lock(request_lock_);
+  std::lock_guard<std::mutex> state_lock(engine_state_lock_);
 
   switch (ec.value()) {
     case 0:
@@ -198,7 +198,7 @@ void RpcConnection::StartWriteLoop() {
 }
 
 void RpcConnection::HandleRpcResponse(const std::vector<char> &data) {
-  std::lock_guard<std::recursive_mutex> request_lock(request_lock_);
+  /* assumed to be called from a context that has already acquired the engine_state_lock */
 
   pbio::ArrayInputStream ar(&data[0], data.size());
   pbio::CodedInputStream in(&ar);
